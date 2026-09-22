@@ -50,6 +50,12 @@ President is played with a standard 52 card deck with anywhere from 3-6 players.
 
 Engine protocol and tests:
 
+- `src.client.BasicClient` is a deterministic basic agent. It always completes when possible and otherwise plays
+  the lowest legal rank (including a bomb before a forced pass). At the same rank it prefers the largest group.
+  It drafts the available pile with the highest face-up rank, requests trade ranks from 2 down to 3 after failures,
+  and returns its lowest card. Each new exchange starts requesting at 2 again. It only passes or declines a
+  completion when no play or completion is possible. Use it with
+  `game.run({player: BasicClient() for player in game.players})` after importing it from `src.client`.
 - `Round.message_for(player)` returns an independent JSON-shaped state snapshot and, when it is that player's turn
   to respond, a private request containing their legal actions. `Round.apply_action(player, action)` returns independent
   copies of newly broadcast public events.
@@ -66,3 +72,20 @@ Engine protocol and tests:
 - Run the dependency-free test suite from the repository root with `python -m unittest -v` (or
   `python -m unittest discover -s tests -v`). The suite includes deterministic multi-round simulations checking card
   conservation, independently checked gameplay legality and turn/board transitions, terminal rankings, and penalty ordering.
+
+Role-effect simulation:
+
+```sh
+python -m src.simulate --games 1000 --seed 42 --output results/role_simulation.json
+```
+
+This runs 1,000 fresh rounds with four `BasicClient` agents. Each trial randomly assigns the previous
+placements as starting roles, then performs the later-round draft, trades, and play. It does not spend a
+first round earning those roles or carry the trial's results into the next trial. Roles are randomized in
+blocks of four so each seat receives every role exactly 250 times in the default run. Decks use a separate
+random stream, and the seed makes the experiment reproducible.
+
+The printed table shows the count and probability of each next-round placement conditional on starting role,
+plus mean placement (lower is better). This measures the combined effect of the role rules under the basic
+agent's policy. The optional JSON output records every trial's starting roles, final placements, deck seed,
+and action count. Change `--games` or `--seed` to run another experiment.
