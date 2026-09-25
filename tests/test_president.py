@@ -544,6 +544,20 @@ def test_messages_and_action_events_are_independent_snapshots():
     assert round_.__dict__ == before
 
 
+def test_turn_history_records_only_accepted_actions_as_independent_private_snapshots():
+    round_ = Round(PLAYERS, first_round=True, deck=standard_deck())
+    action = action_cards(card("3"))
+    assert_rejected_unchanged(round_, "a", action_cards(card("4")))
+    round_.apply_action("a", action)
+    action["cards"][0]["rank"] = "A"
+
+    assert round_.turn_history == [{
+        "player": "a",
+        "action": {"type": "play", "cards": [card("3").json()]},
+    }]
+    assert "turn_history" not in round_.message_for("b")
+
+
 def test_rankings_and_persisted_roles_do_not_alias_returned_data():
     round_ = ready_round({"a": [card("7")], "b": [card("8")], "c": [card("9")], "d": [card("10")]})
     take_turn(round_, "a", action_cards(card("7")))

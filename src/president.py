@@ -78,6 +78,10 @@ class Round:
         self.hands: dict[str, list[Card]] = {p: [] for p in players}
         self.active: set[str] = set(players)
         self.events: list[dict[str, Any]] = []
+        # Unlike ``events``, this records every accepted input, including
+        # private trade-return cards.  It intentionally is not sent by
+        # ``message_for`` because that would reveal those cards to observers.
+        self.turn_history: list[dict[str, Any]] = []
         self.finish_order: list[str] = []
         self.bomb_finishers: list[str] = []
         self.rankings: Optional[dict[str, int]] = None
@@ -182,7 +186,12 @@ class Round:
         return plays
 
     def apply_action(self, player: str, action: Mapping[str, Any]) -> list[dict[str, Any]]:
-        """Apply one JSON action.  Returns only newly broadcast public events."""
+        """Apply one JSON action and record it.  Return new public events only.
+
+        ``turn_history`` receives an independent ``player``/``action`` snapshot
+        only after validation and state changes succeed; rejected actions leave
+        both the round state and its history unchanged.
+        """
         if self.done or self._actor() != player:
             raise IllegalAction("it is not this player's turn/request")
         if not isinstance(action, Mapping):
@@ -197,6 +206,7 @@ class Round:
         elif kind == "bomb": self._bomb(player, action)
         elif kind == "play": self._play(player, action)
         else: raise IllegalAction("unknown action")
+        self.turn_history.append({"player": player, "action": deepcopy(dict(action))})
         return deepcopy(self.events[start:])
 
     # Phase transitions --------------------------------------------------
