@@ -5,7 +5,15 @@ from src.president import RANK_VALUE
 
 
 class Client:
-    """Base class for a JSON-protocol player. Override :meth:`respond`."""
+    """Base class for a JSON-protocol player. Override :meth:`respond`.
+
+    Hosts may also call :meth:`observe` with state snapshots between turns.
+    Stateless clients can ignore those nonblocking updates; interactive clients
+    can use them to keep their display current while another player acts.
+    """
+
+    def observe(self, message: Mapping[str, Any]) -> None:
+        """Receive a nonblocking state update. The default client ignores it."""
 
     def respond(self, message: Mapping[str, Any]) -> dict[str, Any]:
         raise NotImplementedError

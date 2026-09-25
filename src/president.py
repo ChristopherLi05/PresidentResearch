@@ -445,10 +445,18 @@ class Game:
         """Run the current round using in-process clients and return it."""
         if not self.round: self.start_round()
         assert self.round is not None
+        self._notify_clients(clients)
         for _ in range(max_actions):
             if self.round.done: return self.round
             player = self.round._actor()
             if player is None: raise RuntimeError("round has no requested player")
             self.round.apply_action(player, clients[player].respond(self.round.message_for(player)))
+            self._notify_clients(clients)
         if self.round.done: return self.round
         raise RuntimeError("action limit reached")
+
+    def _notify_clients(self, clients: Mapping[str, "Client"]) -> None:
+        """Offer each connected client its latest private snapshot."""
+        assert self.round is not None
+        for player, client in clients.items():
+            client.observe(self.round.message_for(player))

@@ -56,6 +56,16 @@ Engine protocol and tests:
   and returns its lowest card. Each new exchange starts requesting at 2 again. It only passes or declines a
   completion when no play or completion is possible. Use it with
   `game.run({player: BasicClient() for player in game.players})` after importing it from `src.client`.
+- `src.tk_client.HumanClient` is a Tkinter `Client` implementation for a local human player. It renders each
+  private protocol request and blocks until the user selects one of the engine-provided legal actions. Run
+  `python -m src.tk_client` to play successive rounds as `you` against three `BasicClient` opponents. After each
+  round, choose whether to continue; later rounds include drafting and trading based on the prior placements.
+- Run `python -m src.tk_four_human_game` for a local four-human game. It hosts one engine and opens a separate
+  private `HumanClient` window for each seat as that seat is asked to respond. North chooses whether to start the
+  next round, which enables the later-round drafting and trading phase.
+- Run `python -m src.tk_omniscient_game` for a local inspection mode: one `OmniscientHumanClient` plays against
+  three `BasicClient` opponents while seeing every hand and undealt draft pile. This deliberately bypasses normal
+  card privacy and is not for real competitive play.
 - `Round.message_for(player)` returns an independent JSON-shaped state snapshot and, when it is that player's turn
   to respond, a private request containing their legal actions. `Round.apply_action(player, action)` returns independent
   copies of newly broadcast public events.

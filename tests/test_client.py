@@ -2,8 +2,11 @@ import random
 import unittest
 from copy import deepcopy
 
-from src.client import BasicClient
+from src.client import BasicClient, Client
 from src.president import Game, Round, standard_deck
+from src.tk_client import HumanClient
+from src.tk_four_human_game import PLAYERS as HUMAN_PLAYERS
+from src.tk_omniscient_game import omniscient_message
 from tests.test_president import PLAYERS, action_cards, card, ready_round
 
 
@@ -96,3 +99,83 @@ class BasicClientTests(unittest.TestCase):
     def test_rejects_messages_without_a_request(self):
         with self.assertRaisesRegex(ValueError, "no legal action"):
             self.client.respond({"request": None})
+
+
+class HumanClientTests(unittest.TestCase):
+    def test_is_a_client_without_creating_a_window(self):
+        client = HumanClient()
+        self.assertIsInstance(client, Client)
+        self.assertIsNone(client._root)
+
+    def test_omniscient_client_is_a_human_protocol_client(self):
+        from src.tk_client import OmniscientHumanClient
+        self.assertIsInstance(OmniscientHumanClient(), Client)
+
+    def test_auto_declines_a_completion_when_there_is_no_possible_completion(self):
+        client = HumanClient()
+        message = {"request": {"type": "completion", "legal_actions": [
+            {"type": "decline_completion"},
+        ]}}
+        self.assertEqual(client.respond(message), {"type": "decline_completion"})
+        self.assertIsNone(client._root)
+
+    def test_card_history_uses_only_public_card_events(self):
+        history = HumanClient.card_history({"events": [
+            {"type": "trade_completed", "initiator": "a", "receiver": "b"},
+            {"type": "opening_play", "player": "a", "cards": [card("3").json()]},
+            {"type": "bombed", "player": "b", "card": card("2").json()},
+            {"type": "passed", "player": "d"},
+            {"type": "played", "player": "c", "cards": [card("7").json()]},
+        ]})
+        self.assertEqual(history, [
+            {"player": "a", "label": "opened", "cards": [card("3").json()]},
+            {"player": "b", "label": "bombed", "cards": [card("2").json()]},
+            {"player": "d", "label": "passed", "cards": []},
+            {"player": "c", "label": "played", "cards": [card("7").json()]},
+        ])
+
+    def test_multi_card_action_is_available_regardless_of_click_order(self):
+        client = HumanClient()
+        first, second = card("7", "C").json(), card("7", "H").json()
+        client._selected = [second, first]
+        action = {"type": "play", "cards": [first, second]}
+        self.assertEqual(client._selected_action([action]), action)
+
+    def test_four_human_host_defines_four_distinct_seats(self):
+        self.assertEqual(len(HUMAN_PLAYERS), 4)
+        self.assertEqual(len(set(HUMAN_PLAYERS)), 4)
+
+
+class ObservingClient(BasicClient):
+    def __init__(self):
+        super().__init__()
+        self.observations = []
+
+    def observe(self, message):
+        self.observations.append(deepcopy(message))
+
+
+class GameNotificationTests(unittest.TestCase):
+    def test_run_broadcasts_initial_and_post_action_state_to_connected_clients(self):
+        game = Game(PLAYERS)
+        game.round = ready_round({"a": [card("7")], "b": [card("8")]})
+        clients = {player: ObservingClient() for player in ("a", "b")}
+        game.run(clients, max_actions=1)
+        for client in clients.values():
+            self.assertEqual(len(client.observations), 2)
+            self.assertIsNone(client.observations[0]["top"])
+            self.assertTrue(client.observations[-1]["rankings"])
+
+
+class OmniscientGameTests(unittest.TestCase):
+    def test_omniscient_message_contains_every_hand(self):
+        round_ = Round(PLAYERS, first_round=True, deck=standard_deck())
+        message = omniscient_message(round_, "a")
+        self.assertEqual(set(message["all_hands"]), set(PLAYERS))
+        self.assertEqual(sum(len(hand) for hand in message["all_hands"].values()), 52)
+
+    def test_omniscient_hands_use_game_rank_order_not_string_order(self):
+        round_ = Round(PLAYERS, first_round=True, deck=standard_deck())
+        round_.hands["b"] = [card("A"), card("10"), card("2"), card("J")]
+        ranks = [card_["rank"] for card_ in omniscient_message(round_, "a")["all_hands"]["b"]]
+        self.assertEqual(ranks, ["10", "J", "A", "2"])
