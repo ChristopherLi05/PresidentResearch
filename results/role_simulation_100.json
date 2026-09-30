@@ -1,0 +1,1714 @@
+{
+  "games": 100,
+  "seed": 42,
+  "agent": "BasicClient",
+  "players": [
+    "a",
+    "b",
+    "c",
+    "d"
+  ],
+  "design": "Fresh later-round deals; randomized roles balanced across seats in blocks of four.",
+  "records": [
+    {
+      "trial": 1,
+      "deck_seed": 16327409656420543102,
+      "starting_roles": {
+        "a": 4,
+        "b": 3,
+        "c": 1,
+        "d": 2
+      },
+      "placements": {
+        "a": 1,
+        "b": 2,
+        "c": 3,
+        "d": 4
+      },
+      "actions": 166
+    },
+    {
+      "trial": 2,
+      "deck_seed": 6833132306129818655,
+      "starting_roles": {
+        "a": 3,
+        "b": 1,
+        "c": 2,
+        "d": 4
+      },
+      "placements": {
+        "d": 1,
+        "b": 2,
+        "a": 3,
+        "c": 4
+      },
+      "actions": 131
+    },
+    {
+      "trial": 3,
+      "deck_seed": 15764913938253750135,
+      "starting_roles": {
+        "a": 1,
+        "b": 2,
+        "c": 4,
+        "d": 3
+      },
+      "placements": {
+        "c": 1,
+        "b": 2,
+        "d": 3,
+        "a": 4
+      },
+      "actions": 160
+    },
+    {
+      "trial": 4,
+      "deck_seed": 9868935139866971145,
+      "starting_roles": {
+        "a": 2,
+        "b": 4,
+        "c": 3,
+        "d": 1
+      },
+      "placements": {
+        "b": 1,
+        "c": 2,
+        "a": 3,
+        "d": 4
+      },
+      "actions": 161
+    },
+    {
+      "trial": 5,
+      "deck_seed": 2453086106419784595,
+      "starting_roles": {
+        "a": 3,
+        "b": 4,
+        "c": 2,
+        "d": 1
+      },
+      "placements": {
+        "b": 1,
+        "a": 2,
+        "d": 3,
+        "c": 4
+      },
+      "actions": 129
+    },
+    {
+      "trial": 6,
+      "deck_seed": 604554709308610172,
+      "starting_roles": {
+        "a": 2,
+        "b": 1,
+        "c": 3,
+        "d": 4
+      },
+      "placements": {
+        "d": 1,
+        "c": 2,
+        "b": 3,
+        "a": 4
+      },
+      "actions": 188
+    },
+    {
+      "trial": 7,
+      "deck_seed": 6167794502913096802,
+      "starting_roles": {
+        "a": 1,
+        "b": 3,
+        "c": 4,
+        "d": 2
+      },
+      "placements": {
+        "b": 1,
+        "d": 2,
+        "c": 3,
+        "a": 4
+      },
+      "actions": 162
+    },
+    {
+      "trial": 8,
+      "deck_seed": 10569556436078034599,
+      "starting_roles": {
+        "a": 4,
+        "b": 2,
+        "c": 1,
+        "d": 3
+      },
+      "placements": {
+        "a": 1,
+        "d": 2,
+        "b": 3,
+        "c": 4
+      },
+      "actions": 141
+    },
+    {
+      "trial": 9,
+      "deck_seed": 14284910125636122783,
+      "starting_roles": {
+        "a": 4,
+        "b": 2,
+        "c": 3,
+        "d": 1
+      },
+      "placements": {
+        "c": 1,
+        "a": 2,
+        "b": 3,
+        "d": 4
+      },
+      "actions": 230
+    },
+    {
+      "trial": 10,
+      "deck_seed": 314547661645709636,
+      "starting_roles": {
+        "a": 3,
+        "b": 1,
+        "c": 4,
+        "d": 2
+      },
+      "placements": {
+        "c": 1,
+        "a": 2,
+        "d": 3,
+        "b": 4
+      },
+      "actions": 133
+    },
+    {
+      "trial": 11,
+      "deck_seed": 15406072954834006984,
+      "starting_roles": {
+        "a": 2,
+        "b": 3,
+        "c": 1,
+        "d": 4
+      },
+      "placements": {
+        "d": 1,
+        "b": 2,
+        "a": 3,
+        "c": 4
+      },
+      "actions": 121
+    },
+    {
+      "trial": 12,
+      "deck_seed": 1483739417093533912,
+      "starting_roles": {
+        "a": 1,
+        "b": 4,
+        "c": 2,
+        "d": 3
+      },
+      "placements": {
+        "d": 1,
+        "b": 2,
+        "a": 3,
+        "c": 4
+      },
+      "actions": 149
+    },
+    {
+      "trial": 13,
+      "deck_seed": 7997302912280543374,
+      "starting_roles": {
+        "a": 4,
+        "b": 3,
+        "c": 1,
+        "d": 2
+      },
+      "placements": {
+        "a": 1,
+        "b": 2,
+        "c": 3,
+        "d": 4
+      },
+      "actions": 115
+    },
+    {
+      "trial": 14,
+      "deck_seed": 5762744017551183028,
+      "starting_roles": {
+        "a": 1,
+        "b": 2,
+        "c": 4,
+        "d": 3
+      },
+      "placements": {
+        "d": 1,
+        "c": 2,
+        "b": 3,
+        "a": 4
+      },
+      "actions": 119
+    },
+    {
+      "trial": 15,
+      "deck_seed": 2411559516695383097,
+      "starting_roles": {
+        "a": 3,
+        "b": 1,
+        "c": 2,
+        "d": 4
+      },
+      "placements": {
+        "c": 1,
+        "a": 2,
+        "d": 3,
+        "b": 4
+      },
+      "actions": 170
+    },
+    {
+      "trial": 16,
+      "deck_seed": 8705440261904244381,
+      "starting_roles": {
+        "a": 2,
+        "b": 4,
+        "c": 3,
+        "d": 1
+      },
+      "placements": {
+        "b": 1,
+        "c": 2,
+        "d": 3,
+        "a": 4
+      },
+      "actions": 163
+    },
+    {
+      "trial": 17,
+      "deck_seed": 10718610937499982037,
+      "starting_roles": {
+        "a": 3,
+        "b": 1,
+        "c": 2,
+        "d": 4
+      },
+      "placements": {
+        "d": 1,
+        "a": 2,
+        "b": 3,
+        "c": 4
+      },
+      "actions": 122
+    },
+    {
+      "trial": 18,
+      "deck_seed": 7506774653821328858,
+      "starting_roles": {
+        "a": 4,
+        "b": 3,
+        "c": 1,
+        "d": 2
+      },
+      "placements": {
+        "a": 1,
+        "c": 2,
+        "b": 3,
+        "d": 4
+      },
+      "actions": 187
+    },
+    {
+      "trial": 19,
+      "deck_seed": 7462126454330866551,
+      "starting_roles": {
+        "a": 1,
+        "b": 2,
+        "c": 4,
+        "d": 3
+      },
+      "placements": {
+        "d": 1,
+        "b": 2,
+        "c": 3,
+        "a": 4
+      },
+      "actions": 147
+    },
+    {
+      "trial": 20,
+      "deck_seed": 15729251691786204925,
+      "starting_roles": {
+        "a": 2,
+        "b": 4,
+        "c": 3,
+        "d": 1
+      },
+      "placements": {
+        "b": 1,
+        "c": 2,
+        "a": 3,
+        "d": 4
+      },
+      "actions": 149
+    },
+    {
+      "trial": 21,
+      "deck_seed": 9832762579312283594,
+      "starting_roles": {
+        "a": 1,
+        "b": 2,
+        "c": 4,
+        "d": 3
+      },
+      "placements": {
+        "c": 1,
+        "b": 2,
+        "d": 3,
+        "a": 4
+      },
+      "actions": 173
+    },
+    {
+      "trial": 22,
+      "deck_seed": 10792269186522255644,
+      "starting_roles": {
+        "a": 2,
+        "b": 4,
+        "c": 3,
+        "d": 1
+      },
+      "placements": {
+        "c": 1,
+        "b": 2,
+        "d": 3,
+        "a": 4
+      },
+      "actions": 101
+    },
+    {
+      "trial": 23,
+      "deck_seed": 3956538684253227225,
+      "starting_roles": {
+        "a": 3,
+        "b": 1,
+        "c": 2,
+        "d": 4
+      },
+      "placements": {
+        "d": 1,
+        "c": 2,
+        "a": 3,
+        "b": 4
+      },
+      "actions": 166
+    },
+    {
+      "trial": 24,
+      "deck_seed": 11060773021220526735,
+      "starting_roles": {
+        "a": 4,
+        "b": 3,
+        "c": 1,
+        "d": 2
+      },
+      "placements": {
+        "d": 1,
+        "a": 2,
+        "b": 3,
+        "c": 4
+      },
+      "actions": 156
+    },
+    {
+      "trial": 25,
+      "deck_seed": 17203293977336082146,
+      "starting_roles": {
+        "a": 1,
+        "b": 3,
+        "c": 4,
+        "d": 2
+      },
+      "placements": {
+        "b": 1,
+        "c": 2,
+        "d": 3,
+        "a": 4
+      },
+      "actions": 219
+    },
+    {
+      "trial": 26,
+      "deck_seed": 9044912844944000597,
+      "starting_roles": {
+        "a": 3,
+        "b": 4,
+        "c": 2,
+        "d": 1
+      },
+      "placements": {
+        "a": 1,
+        "d": 2,
+        "b": 3,
+        "c": 4
+      },
+      "actions": 136
+    },
+    {
+      "trial": 27,
+      "deck_seed": 16252263384843453633,
+      "starting_roles": {
+        "a": 2,
+        "b": 1,
+        "c": 3,
+        "d": 4
+      },
+      "placements": {
+        "d": 1,
+        "c": 2,
+        "a": 3,
+        "b": 4
+      },
+      "actions": 124
+    },
+    {
+      "trial": 28,
+      "deck_seed": 2793201726995145005,
+      "starting_roles": {
+        "a": 4,
+        "b": 2,
+        "c": 1,
+        "d": 3
+      },
+      "placements": {
+        "a": 1,
+        "d": 2,
+        "c": 3,
+        "b": 4
+      },
+      "actions": 155
+    },
+    {
+      "trial": 29,
+      "deck_seed": 11052910785794427441,
+      "starting_roles": {
+        "a": 1,
+        "b": 4,
+        "c": 2,
+        "d": 3
+      },
+      "placements": {
+        "b": 1,
+        "d": 2,
+        "c": 3,
+        "a": 4
+      },
+      "actions": 111
+    },
+    {
+      "trial": 30,
+      "deck_seed": 16143631372692279387,
+      "starting_roles": {
+        "a": 3,
+        "b": 1,
+        "c": 4,
+        "d": 2
+      },
+      "placements": {
+        "d": 1,
+        "c": 2,
+        "a": 3,
+        "b": 4
+      },
+      "actions": 165
+    },
+    {
+      "trial": 31,
+      "deck_seed": 13001908764146951477,
+      "starting_roles": {
+        "a": 4,
+        "b": 2,
+        "c": 3,
+        "d": 1
+      },
+      "placements": {
+        "b": 1,
+        "c": 2,
+        "a": 3,
+        "d": 4
+      },
+      "actions": 136
+    },
+    {
+      "trial": 32,
+      "deck_seed": 1570998078604977136,
+      "starting_roles": {
+        "a": 2,
+        "b": 3,
+        "c": 1,
+        "d": 4
+      },
+      "placements": {
+        "b": 1,
+        "d": 2,
+        "c": 3,
+        "a": 4
+      },
+      "actions": 155
+    },
+    {
+      "trial": 33,
+      "deck_seed": 9344476012285748032,
+      "starting_roles": {
+        "a": 2,
+        "b": 3,
+        "c": 1,
+        "d": 4
+      },
+      "placements": {
+        "b": 1,
+        "d": 2,
+        "a": 3,
+        "c": 4
+      },
+      "actions": 104
+    },
+    {
+      "trial": 34,
+      "deck_seed": 8963611950161174655,
+      "starting_roles": {
+        "a": 4,
+        "b": 2,
+        "c": 3,
+        "d": 1
+      },
+      "placements": {
+        "c": 1,
+        "a": 2,
+        "b": 3,
+        "d": 4
+      },
+      "actions": 151
+    },
+    {
+      "trial": 35,
+      "deck_seed": 1681052300879985113,
+      "starting_roles": {
+        "a": 1,
+        "b": 4,
+        "c": 2,
+        "d": 3
+      },
+      "placements": {
+        "d": 1,
+        "b": 2,
+        "a": 3,
+        "c": 4
+      },
+      "actions": 109
+    },
+    {
+      "trial": 36,
+      "deck_seed": 14929044680386351681,
+      "starting_roles": {
+        "a": 3,
+        "b": 1,
+        "c": 4,
+        "d": 2
+      },
+      "placements": {
+        "c": 1,
+        "b": 2,
+        "a": 3,
+        "d": 4
+      },
+      "actions": 122
+    },
+    {
+      "trial": 37,
+      "deck_seed": 14461803259805084509,
+      "starting_roles": {
+        "a": 2,
+        "b": 3,
+        "c": 4,
+        "d": 1
+      },
+      "placements": {
+        "a": 1,
+        "d": 2,
+        "c": 3,
+        "b": 4
+      },
+      "actions": 192
+    },
+    {
+      "trial": 38,
+      "deck_seed": 15122963367873482601,
+      "starting_roles": {
+        "a": 1,
+        "b": 2,
+        "c": 3,
+        "d": 4
+      },
+      "placements": {
+        "c": 1,
+        "d": 2,
+        "a": 3,
+        "b": 4
+      },
+      "actions": 167
+    },
+    {
+      "trial": 39,
+      "deck_seed": 15476555436559809989,
+      "starting_roles": {
+        "a": 4,
+        "b": 1,
+        "c": 2,
+        "d": 3
+      },
+      "placements": {
+        "c": 1,
+        "a": 2,
+        "d": 3,
+        "b": 4
+      },
+      "actions": 160
+    },
+    {
+      "trial": 40,
+      "deck_seed": 11082426120776513543,
+      "starting_roles": {
+        "a": 3,
+        "b": 4,
+        "c": 1,
+        "d": 2
+      },
+      "placements": {
+        "b": 1,
+        "d": 2,
+        "a": 3,
+        "c": 4
+      },
+      "actions": 196
+    },
+    {
+      "trial": 41,
+      "deck_seed": 1270956870501143341,
+      "starting_roles": {
+        "a": 1,
+        "b": 2,
+        "c": 4,
+        "d": 3
+      },
+      "placements": {
+        "d": 1,
+        "c": 2,
+        "b": 3,
+        "a": 4
+      },
+      "actions": 132
+    },
+    {
+      "trial": 42,
+      "deck_seed": 15796223702846226238,
+      "starting_roles": {
+        "a": 4,
+        "b": 3,
+        "c": 1,
+        "d": 2
+      },
+      "placements": {
+        "a": 1,
+        "b": 2,
+        "c": 3,
+        "d": 4
+      },
+      "actions": 116
+    },
+    {
+      "trial": 43,
+      "deck_seed": 2196082791697588344,
+      "starting_roles": {
+        "a": 2,
+        "b": 4,
+        "c": 3,
+        "d": 1
+      },
+      "placements": {
+        "b": 1,
+        "c": 2,
+        "a": 3,
+        "d": 4
+      },
+      "actions": 138
+    },
+    {
+      "trial": 44,
+      "deck_seed": 1071999398306198329,
+      "starting_roles": {
+        "a": 3,
+        "b": 1,
+        "c": 2,
+        "d": 4
+      },
+      "placements": {
+        "a": 1,
+        "c": 2,
+        "d": 3,
+        "b": 4
+      },
+      "actions": 173
+    },
+    {
+      "trial": 45,
+      "deck_seed": 319272157646578412,
+      "starting_roles": {
+        "a": 1,
+        "b": 2,
+        "c": 3,
+        "d": 4
+      },
+      "placements": {
+        "c": 1,
+        "d": 2,
+        "b": 3,
+        "a": 4
+      },
+      "actions": 139
+    },
+    {
+      "trial": 46,
+      "deck_seed": 13676124592352519456,
+      "starting_roles": {
+        "a": 4,
+        "b": 1,
+        "c": 2,
+        "d": 3
+      },
+      "placements": {
+        "b": 1,
+        "a": 2,
+        "c": 3,
+        "d": 4
+      },
+      "actions": 151
+    },
+    {
+      "trial": 47,
+      "deck_seed": 8138739785375415504,
+      "starting_roles": {
+        "a": 2,
+        "b": 3,
+        "c": 4,
+        "d": 1
+      },
+      "placements": {
+        "c": 1,
+        "b": 2,
+        "a": 3,
+        "d": 4
+      },
+      "actions": 116
+    },
+    {
+      "trial": 48,
+      "deck_seed": 3636541724021045304,
+      "starting_roles": {
+        "a": 3,
+        "b": 4,
+        "c": 1,
+        "d": 2
+      },
+      "placements": {
+        "d": 1,
+        "b": 2,
+        "a": 3,
+        "c": 4
+      },
+      "actions": 199
+    },
+    {
+      "trial": 49,
+      "deck_seed": 12055263074016551769,
+      "starting_roles": {
+        "a": 2,
+        "b": 4,
+        "c": 3,
+        "d": 1
+      },
+      "placements": {
+        "b": 1,
+        "c": 2,
+        "d": 3,
+        "a": 4
+      },
+      "actions": 166
+    },
+    {
+      "trial": 50,
+      "deck_seed": 8182101851068988588,
+      "starting_roles": {
+        "a": 1,
+        "b": 2,
+        "c": 4,
+        "d": 3
+      },
+      "placements": {
+        "c": 1,
+        "d": 2,
+        "a": 3,
+        "b": 4
+      },
+      "actions": 172
+    },
+    {
+      "trial": 51,
+      "deck_seed": 2364959405297595945,
+      "starting_roles": {
+        "a": 4,
+        "b": 3,
+        "c": 1,
+        "d": 2
+      },
+      "placements": {
+        "d": 1,
+        "a": 2,
+        "b": 3,
+        "c": 4
+      },
+      "actions": 107
+    },
+    {
+      "trial": 52,
+      "deck_seed": 9194557742725024325,
+      "starting_roles": {
+        "a": 3,
+        "b": 1,
+        "c": 2,
+        "d": 4
+      },
+      "placements": {
+        "a": 1,
+        "d": 2,
+        "c": 3,
+        "b": 4
+      },
+      "actions": 132
+    },
+    {
+      "trial": 53,
+      "deck_seed": 8183711195747654217,
+      "starting_roles": {
+        "a": 4,
+        "b": 1,
+        "c": 3,
+        "d": 2
+      },
+      "placements": {
+        "c": 1,
+        "a": 2,
+        "b": 3,
+        "d": 4
+      },
+      "actions": 144
+    },
+    {
+      "trial": 54,
+      "deck_seed": 10181696007489255565,
+      "starting_roles": {
+        "a": 3,
+        "b": 2,
+        "c": 4,
+        "d": 1
+      },
+      "placements": {
+        "c": 1,
+        "d": 2,
+        "a": 3,
+        "b": 4
+      },
+      "actions": 158
+    },
+    {
+      "trial": 55,
+      "deck_seed": 12525000320246647179,
+      "starting_roles": {
+        "a": 2,
+        "b": 4,
+        "c": 1,
+        "d": 3
+      },
+      "placements": {
+        "c": 1,
+        "b": 2,
+        "a": 3,
+        "d": 4
+      },
+      "actions": 154
+    },
+    {
+      "trial": 56,
+      "deck_seed": 16266283965862670447,
+      "starting_roles": {
+        "a": 1,
+        "b": 3,
+        "c": 2,
+        "d": 4
+      },
+      "placements": {
+        "d": 1,
+        "b": 2,
+        "c": 3,
+        "a": 4
+      },
+      "actions": 131
+    },
+    {
+      "trial": 57,
+      "deck_seed": 11805505828987928375,
+      "starting_roles": {
+        "a": 3,
+        "b": 2,
+        "c": 4,
+        "d": 1
+      },
+      "placements": {
+        "a": 1,
+        "b": 2,
+        "c": 3,
+        "d": 4
+      },
+      "actions": 109
+    },
+    {
+      "trial": 58,
+      "deck_seed": 9421921359309676774,
+      "starting_roles": {
+        "a": 4,
+        "b": 1,
+        "c": 3,
+        "d": 2
+      },
+      "placements": {
+        "a": 1,
+        "d": 2,
+        "b": 3,
+        "c": 4
+      },
+      "actions": 108
+    },
+    {
+      "trial": 59,
+      "deck_seed": 11810364941175183516,
+      "starting_roles": {
+        "a": 2,
+        "b": 4,
+        "c": 1,
+        "d": 3
+      },
+      "placements": {
+        "c": 1,
+        "b": 2,
+        "d": 3,
+        "a": 4
+      },
+      "actions": 152
+    },
+    {
+      "trial": 60,
+      "deck_seed": 14312506138486465017,
+      "starting_roles": {
+        "a": 1,
+        "b": 3,
+        "c": 2,
+        "d": 4
+      },
+      "placements": {
+        "d": 1,
+        "b": 2,
+        "c": 3,
+        "a": 4
+      },
+      "actions": 89
+    },
+    {
+      "trial": 61,
+      "deck_seed": 14062067749904491496,
+      "starting_roles": {
+        "a": 3,
+        "b": 2,
+        "c": 1,
+        "d": 4
+      },
+      "placements": {
+        "c": 1,
+        "d": 2,
+        "a": 3,
+        "b": 4
+      },
+      "actions": 164
+    },
+    {
+      "trial": 62,
+      "deck_seed": 16587648777373829247,
+      "starting_roles": {
+        "a": 1,
+        "b": 4,
+        "c": 3,
+        "d": 2
+      },
+      "placements": {
+        "c": 1,
+        "b": 2,
+        "a": 3,
+        "d": 4
+      },
+      "actions": 138
+    },
+    {
+      "trial": 63,
+      "deck_seed": 8964957605293736237,
+      "starting_roles": {
+        "a": 2,
+        "b": 1,
+        "c": 4,
+        "d": 3
+      },
+      "placements": {
+        "c": 1,
+        "d": 2,
+        "b": 3,
+        "a": 4
+      },
+      "actions": 168
+    },
+    {
+      "trial": 64,
+      "deck_seed": 16226509636026881491,
+      "starting_roles": {
+        "a": 4,
+        "b": 3,
+        "c": 2,
+        "d": 1
+      },
+      "placements": {
+        "a": 1,
+        "b": 2,
+        "d": 3,
+        "c": 4
+      },
+      "actions": 114
+    },
+    {
+      "trial": 65,
+      "deck_seed": 18136187857149957348,
+      "starting_roles": {
+        "a": 3,
+        "b": 4,
+        "c": 1,
+        "d": 2
+      },
+      "placements": {
+        "b": 1,
+        "c": 2,
+        "a": 3,
+        "d": 4
+      },
+      "actions": 146
+    },
+    {
+      "trial": 66,
+      "deck_seed": 3917978559643517534,
+      "starting_roles": {
+        "a": 4,
+        "b": 1,
+        "c": 2,
+        "d": 3
+      },
+      "placements": {
+        "d": 1,
+        "a": 2,
+        "c": 3,
+        "b": 4
+      },
+      "actions": 128
+    },
+    {
+      "trial": 67,
+      "deck_seed": 6940970874479417956,
+      "starting_roles": {
+        "a": 1,
+        "b": 2,
+        "c": 3,
+        "d": 4
+      },
+      "placements": {
+        "d": 1,
+        "b": 2,
+        "c": 3,
+        "a": 4
+      },
+      "actions": 149
+    },
+    {
+      "trial": 68,
+      "deck_seed": 8500826215499060190,
+      "starting_roles": {
+        "a": 2,
+        "b": 3,
+        "c": 4,
+        "d": 1
+      },
+      "placements": {
+        "b": 1,
+        "c": 2,
+        "d": 3,
+        "a": 4
+      },
+      "actions": 166
+    },
+    {
+      "trial": 69,
+      "deck_seed": 9666722486657907901,
+      "starting_roles": {
+        "a": 1,
+        "b": 2,
+        "c": 4,
+        "d": 3
+      },
+      "placements": {
+        "c": 1,
+        "d": 2,
+        "b": 3,
+        "a": 4
+      },
+      "actions": 157
+    },
+    {
+      "trial": 70,
+      "deck_seed": 11684479890210231995,
+      "starting_roles": {
+        "a": 3,
+        "b": 1,
+        "c": 2,
+        "d": 4
+      },
+      "placements": {
+        "a": 1,
+        "b": 2,
+        "d": 3,
+        "c": 4
+      },
+      "actions": 138
+    },
+    {
+      "trial": 71,
+      "deck_seed": 5669118415428430478,
+      "starting_roles": {
+        "a": 4,
+        "b": 3,
+        "c": 1,
+        "d": 2
+      },
+      "placements": {
+        "a": 1,
+        "c": 2,
+        "d": 3,
+        "b": 4
+      },
+      "actions": 116
+    },
+    {
+      "trial": 72,
+      "deck_seed": 5185663002859036501,
+      "starting_roles": {
+        "a": 2,
+        "b": 4,
+        "c": 3,
+        "d": 1
+      },
+      "placements": {
+        "b": 1,
+        "c": 2,
+        "d": 3,
+        "a": 4
+      },
+      "actions": 127
+    },
+    {
+      "trial": 73,
+      "deck_seed": 15755620812828243694,
+      "starting_roles": {
+        "a": 2,
+        "b": 3,
+        "c": 1,
+        "d": 4
+      },
+      "placements": {
+        "a": 1,
+        "d": 2,
+        "b": 3,
+        "c": 4
+      },
+      "actions": 167
+    },
+    {
+      "trial": 74,
+      "deck_seed": 16180930076065085404,
+      "starting_roles": {
+        "a": 4,
+        "b": 2,
+        "c": 3,
+        "d": 1
+      },
+      "placements": {
+        "c": 1,
+        "a": 2,
+        "d": 3,
+        "b": 4
+      },
+      "actions": 144
+    },
+    {
+      "trial": 75,
+      "deck_seed": 17887616306284553739,
+      "starting_roles": {
+        "a": 1,
+        "b": 4,
+        "c": 2,
+        "d": 3
+      },
+      "placements": {
+        "b": 1,
+        "a": 2,
+        "d": 3,
+        "c": 4
+      },
+      "actions": 119
+    },
+    {
+      "trial": 76,
+      "deck_seed": 17343845346549482943,
+      "starting_roles": {
+        "a": 3,
+        "b": 1,
+        "c": 4,
+        "d": 2
+      },
+      "placements": {
+        "c": 1,
+        "a": 2,
+        "d": 3,
+        "b": 4
+      },
+      "actions": 154
+    },
+    {
+      "trial": 77,
+      "deck_seed": 11040742089649739389,
+      "starting_roles": {
+        "a": 1,
+        "b": 4,
+        "c": 2,
+        "d": 3
+      },
+      "placements": {
+        "b": 1,
+        "c": 2,
+        "d": 3,
+        "a": 4
+      },
+      "actions": 187
+    },
+    {
+      "trial": 78,
+      "deck_seed": 18417880653358057224,
+      "starting_roles": {
+        "a": 2,
+        "b": 3,
+        "c": 1,
+        "d": 4
+      },
+      "placements": {
+        "a": 1,
+        "b": 2,
+        "d": 3,
+        "c": 4
+      },
+      "actions": 191
+    },
+    {
+      "trial": 79,
+      "deck_seed": 13299776797108091825,
+      "starting_roles": {
+        "a": 3,
+        "b": 1,
+        "c": 4,
+        "d": 2
+      },
+      "placements": {
+        "c": 1,
+        "d": 2,
+        "a": 3,
+        "b": 4
+      },
+      "actions": 180
+    },
+    {
+      "trial": 80,
+      "deck_seed": 2783764503577509215,
+      "starting_roles": {
+        "a": 4,
+        "b": 2,
+        "c": 3,
+        "d": 1
+      },
+      "placements": {
+        "c": 1,
+        "a": 2,
+        "b": 3,
+        "d": 4
+      },
+      "actions": 140
+    },
+    {
+      "trial": 81,
+      "deck_seed": 18434996794575099701,
+      "starting_roles": {
+        "a": 2,
+        "b": 1,
+        "c": 3,
+        "d": 4
+      },
+      "placements": {
+        "d": 1,
+        "c": 2,
+        "b": 3,
+        "a": 4
+      },
+      "actions": 206
+    },
+    {
+      "trial": 82,
+      "deck_seed": 13765772685058728295,
+      "starting_roles": {
+        "a": 1,
+        "b": 3,
+        "c": 4,
+        "d": 2
+      },
+      "placements": {
+        "b": 1,
+        "c": 2,
+        "d": 3,
+        "a": 4
+      },
+      "actions": 146
+    },
+    {
+      "trial": 83,
+      "deck_seed": 4259288697364925768,
+      "starting_roles": {
+        "a": 4,
+        "b": 2,
+        "c": 1,
+        "d": 3
+      },
+      "placements": {
+        "a": 1,
+        "c": 2,
+        "b": 3,
+        "d": 4
+      },
+      "actions": 94
+    },
+    {
+      "trial": 84,
+      "deck_seed": 1325060437686633282,
+      "starting_roles": {
+        "a": 3,
+        "b": 4,
+        "c": 2,
+        "d": 1
+      },
+      "placements": {
+        "a": 1,
+        "b": 2,
+        "d": 3,
+        "c": 4
+      },
+      "actions": 121
+    },
+    {
+      "trial": 85,
+      "deck_seed": 14578265030079600650,
+      "starting_roles": {
+        "a": 1,
+        "b": 2,
+        "c": 4,
+        "d": 3
+      },
+      "placements": {
+        "d": 1,
+        "c": 2,
+        "b": 3,
+        "a": 4
+      },
+      "actions": 138
+    },
+    {
+      "trial": 86,
+      "deck_seed": 14346766859258750671,
+      "starting_roles": {
+        "a": 4,
+        "b": 3,
+        "c": 1,
+        "d": 2
+      },
+      "placements": {
+        "a": 1,
+        "b": 2,
+        "c": 3,
+        "d": 4
+      },
+      "actions": 124
+    },
+    {
+      "trial": 87,
+      "deck_seed": 8086967933892231508,
+      "starting_roles": {
+        "a": 3,
+        "b": 1,
+        "c": 2,
+        "d": 4
+      },
+      "placements": {
+        "a": 1,
+        "d": 2,
+        "c": 3,
+        "b": 4
+      },
+      "actions": 138
+    },
+    {
+      "trial": 88,
+      "deck_seed": 4781414793973706435,
+      "starting_roles": {
+        "a": 2,
+        "b": 4,
+        "c": 3,
+        "d": 1
+      },
+      "placements": {
+        "a": 1,
+        "c": 2,
+        "b": 3,
+        "d": 4
+      },
+      "actions": 186
+    },
+    {
+      "trial": 89,
+      "deck_seed": 1983267697767699340,
+      "starting_roles": {
+        "a": 3,
+        "b": 4,
+        "c": 1,
+        "d": 2
+      },
+      "placements": {
+        "a": 1,
+        "b": 2,
+        "d": 3,
+        "c": 4
+      },
+      "actions": 165
+    },
+    {
+      "trial": 90,
+      "deck_seed": 12258653076886807305,
+      "starting_roles": {
+        "a": 1,
+        "b": 2,
+        "c": 3,
+        "d": 4
+      },
+      "placements": {
+        "d": 1,
+        "c": 2,
+        "a": 3,
+        "b": 4
+      },
+      "actions": 126
+    },
+    {
+      "trial": 91,
+      "deck_seed": 1951020497381474963,
+      "starting_roles": {
+        "a": 4,
+        "b": 1,
+        "c": 2,
+        "d": 3
+      },
+      "placements": {
+        "d": 1,
+        "a": 2,
+        "b": 3,
+        "c": 4
+      },
+      "actions": 147
+    },
+    {
+      "trial": 92,
+      "deck_seed": 9405066079544984260,
+      "starting_roles": {
+        "a": 2,
+        "b": 3,
+        "c": 4,
+        "d": 1
+      },
+      "placements": {
+        "c": 1,
+        "d": 2,
+        "a": 3,
+        "b": 4
+      },
+      "actions": 141
+    },
+    {
+      "trial": 93,
+      "deck_seed": 14335860155111305254,
+      "starting_roles": {
+        "a": 1,
+        "b": 2,
+        "c": 3,
+        "d": 4
+      },
+      "placements": {
+        "d": 1,
+        "c": 2,
+        "a": 3,
+        "b": 4
+      },
+      "actions": 132
+    },
+    {
+      "trial": 94,
+      "deck_seed": 17286962091032123328,
+      "starting_roles": {
+        "a": 2,
+        "b": 3,
+        "c": 4,
+        "d": 1
+      },
+      "placements": {
+        "c": 1,
+        "b": 2,
+        "d": 3,
+        "a": 4
+      },
+      "actions": 124
+    },
+    {
+      "trial": 95,
+      "deck_seed": 8180871576725510969,
+      "starting_roles": {
+        "a": 4,
+        "b": 1,
+        "c": 2,
+        "d": 3
+      },
+      "placements": {
+        "c": 1,
+        "d": 2,
+        "b": 3,
+        "a": 4
+      },
+      "actions": 132
+    },
+    {
+      "trial": 96,
+      "deck_seed": 4492811646344496769,
+      "starting_roles": {
+        "a": 3,
+        "b": 4,
+        "c": 1,
+        "d": 2
+      },
+      "placements": {
+        "a": 1,
+        "b": 2,
+        "c": 3,
+        "d": 4
+      },
+      "actions": 157
+    },
+    {
+      "trial": 97,
+      "deck_seed": 131831450033192197,
+      "starting_roles": {
+        "a": 1,
+        "b": 3,
+        "c": 2,
+        "d": 4
+      },
+      "placements": {
+        "d": 1,
+        "a": 2,
+        "b": 3,
+        "c": 4
+      },
+      "actions": 110
+    },
+    {
+      "trial": 98,
+      "deck_seed": 8292840002128524126,
+      "starting_roles": {
+        "a": 4,
+        "b": 1,
+        "c": 3,
+        "d": 2
+      },
+      "placements": {
+        "b": 1,
+        "c": 2,
+        "a": 3,
+        "d": 4
+      },
+      "actions": 169
+    },
+    {
+      "trial": 99,
+      "deck_seed": 4814255874140673014,
+      "starting_roles": {
+        "a": 2,
+        "b": 4,
+        "c": 1,
+        "d": 3
+      },
+      "placements": {
+        "d": 1,
+        "b": 2,
+        "a": 3,
+        "c": 4
+      },
+      "actions": 129
+    },
+    {
+      "trial": 100,
+      "deck_seed": 7258515159738125978,
+      "starting_roles": {
+        "a": 3,
+        "b": 2,
+        "c": 4,
+        "d": 1
+      },
+      "placements": {
+        "d": 1,
+        "c": 2,
+        "a": 3,
+        "b": 4
+      },
+      "actions": 178
+    }
+  ]
+}

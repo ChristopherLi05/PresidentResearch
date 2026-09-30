@@ -1,0 +1,50 @@
+{
+  "games": 5000,
+  "players_per_game": 4,
+  "terminal_actions": {
+    "play": 4699,
+    "complete": 301
+  },
+  "terminal_actions_with_twos_announced": {
+    "play": 1695,
+    "complete": 183
+  },
+  "placement_mechanisms": {
+    "only_2s_penalty": 6948,
+    "ordinary_play": 7491,
+    "last_remaining_player": 5000,
+    "completion": 561
+  },
+  "board_clears": {
+    "completion": 32534,
+    "pass_around": 3168,
+    "2_bomb": 6033,
+    "four_of_a_kind_play": 3489
+  },
+  "completion_events": 32835,
+  "actions": {
+    "choose_pile": 20000,
+    "trade_request": 26565,
+    "trade_return": 15000,
+    "play": 140408,
+    "decline_completion": 477925,
+    "complete": 32835,
+    "pass": 13422,
+    "bomb": 6033
+  },
+  "twos_by_starting_role": {
+    "President": 3650,
+    "Vice President": 2762,
+    "Vice Scum": 471,
+    "Scum": 65
+  },
+  "board_rounds": {
+    "completed": 45224,
+    "mean_responses": 14.415951707058198,
+    "mean_decisions": 4.056784008491067,
+    "minimum_responses": 1,
+    "maximum_responses": 86,
+    "terminal_segments": 5000,
+    "mean_terminal_segment_responses": 3.7352
+  }
+}

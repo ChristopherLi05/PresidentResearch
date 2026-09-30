@@ -99,3 +99,15 @@ The printed table shows the count and probability of each next-round placement c
 plus mean placement (lower is better). This measures the combined effect of the role rules under the basic
 agent's policy. The optional JSON output records every trial's starting roles, final placements, deck seed,
 and action count. Change `--games` or `--seed` to run another experiment.
+
+Round-ending analysis:
+
+```sh
+python -m src.analyze_round_endings results/role_simulation_5000.json --output results/round_ending_analysis_5000.json
+```
+
+This replays the seeded deals in a simulation result and prints tables for the final action that ends each
+game, how player placements are assigned, and what clears the board. It also reports board-round length,
+where a board round is the interval from one cleared board to the next. A pass-around is a board-clear cause,
+not a direct game-ending cause. Replaying the 5,000-game result can take a few minutes because the original
+simulation files retain seeds and placements rather than full event histories.
