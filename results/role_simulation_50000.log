@@ -1,0 +1,20 @@
+50,000 randomized-role rounds | BasicClient | seed 42
+Each trial starts with assigned roles, then drafts, trades, and plays a fresh deal.
+Rows: starting role. Columns: next-round placement; count (row percentage).
+
+Starting role                1st             2nd             3rd             4th   Mean place
+President            2802 (5.6%)     3852 (7.7%)   15115 (30.2%)   28231 (56.5%)        3.376
+Vice President      6372 (12.7%)    7644 (15.3%)   17639 (35.3%)   18345 (36.7%)        2.959
+Vice Scum          18403 (36.8%)   19714 (39.4%)    9278 (18.6%)     2605 (5.2%)        1.922
+Scum               22423 (44.8%)   18790 (37.6%)    7968 (15.9%)      819 (1.6%)        1.744
+
+Lower mean placement is better; equal placement probabilities give a mean of 2.500.
+These results measure the combined draft, trade, and starting-turn rules with this agent.
+
+Starting-role assignments by seat (President, Vice President, Vice Scum, Scum):
+  a: 12500, 12500, 12500, 12500
+  b: 12500, 12500, 12500, 12500
+  c: 12500, 12500, 12500, 12500
+  d: 12500, 12500, 12500, 12500
+
+Trial data saved to results\role_simulation_50000.json

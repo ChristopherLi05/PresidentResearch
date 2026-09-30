@@ -1,0 +1,114 @@
+{
+  "games": 50000,
+  "agent": "BasicClient",
+  "stages": {
+    "pre_trade": {
+      "President": {
+        "hands": 50000,
+        "mean_single_groups": 5.68332,
+        "hands_with_single_rate": 0.99956,
+        "mean_pair_groups": 2.77604,
+        "hands_with_pair_rate": 0.97874,
+        "mean_triple_groups": 0.54132,
+        "hands_with_triple_rate": 0.46596,
+        "mean_four_kind_groups": 0.03516,
+        "hands_with_four_kind_rate": 0.035,
+        "mean_bomb_cards": 1.20462,
+        "hands_with_bomb_rate": 0.78366
+      },
+      "Vice President": {
+        "hands": 50000,
+        "mean_single_groups": 5.72388,
+        "hands_with_single_rate": 0.99946,
+        "mean_pair_groups": 2.76652,
+        "hands_with_pair_rate": 0.9789,
+        "mean_triple_groups": 0.53444,
+        "hands_with_triple_rate": 0.4621,
+        "mean_four_kind_groups": 0.03494,
+        "hands_with_four_kind_rate": 0.03482,
+        "mean_bomb_cards": 0.94778,
+        "hands_with_bomb_rate": 0.67764
+      },
+      "Vice Scum": {
+        "hands": 50000,
+        "mean_single_groups": 5.72448,
+        "hands_with_single_rate": 0.99938,
+        "mean_pair_groups": 2.77268,
+        "hands_with_pair_rate": 0.97892,
+        "mean_triple_groups": 0.53368,
+        "hands_with_triple_rate": 0.46212,
+        "mean_four_kind_groups": 0.03228,
+        "hands_with_four_kind_rate": 0.03218,
+        "mean_bomb_cards": 0.9238,
+        "hands_with_bomb_rate": 0.66338
+      },
+      "Scum": {
+        "hands": 50000,
+        "mean_single_groups": 5.68832,
+        "hands_with_single_rate": 0.99948,
+        "mean_pair_groups": 2.77584,
+        "hands_with_pair_rate": 0.97918,
+        "mean_triple_groups": 0.53992,
+        "hands_with_triple_rate": 0.46498,
+        "mean_four_kind_groups": 0.03506,
+        "hands_with_four_kind_rate": 0.03494,
+        "mean_bomb_cards": 0.9238,
+        "hands_with_bomb_rate": 0.66352
+      }
+    },
+    "post_trade": {
+      "President": {
+        "hands": 50000,
+        "mean_single_groups": 4.47356,
+        "hands_with_single_rate": 0.99532,
+        "mean_pair_groups": 2.72656,
+        "hands_with_pair_rate": 0.9703,
+        "mean_triple_groups": 0.8726,
+        "hands_with_triple_rate": 0.66634,
+        "mean_four_kind_groups": 0.11388,
+        "hands_with_four_kind_rate": 0.11206,
+        "mean_bomb_cards": 2.09188,
+        "hands_with_bomb_rate": 0.96124
+      },
+      "Vice President": {
+        "hands": 50000,
+        "mean_single_groups": 5.30416,
+        "hands_with_single_rate": 0.99902,
+        "mean_pair_groups": 2.81728,
+        "hands_with_pair_rate": 0.97918,
+        "mean_triple_groups": 0.6236,
+        "hands_with_triple_rate": 0.52066,
+        "mean_four_kind_groups": 0.04762,
+        "hands_with_four_kind_rate": 0.04742,
+        "mean_bomb_cards": 1.61116,
+        "hands_with_bomb_rate": 0.93174
+      },
+      "Vice Scum": {
+        "hands": 50000,
+        "mean_single_groups": 5.2985,
+        "hands_with_single_rate": 0.99886,
+        "mean_pair_groups": 2.82678,
+        "hands_with_pair_rate": 0.97946,
+        "mean_triple_groups": 0.62238,
+        "hands_with_triple_rate": 0.5204,
+        "mean_four_kind_groups": 0.0452,
+        "hands_with_four_kind_rate": 0.04498,
+        "mean_bomb_cards": 0.26042,
+        "hands_with_bomb_rate": 0.22462
+      },
+      "Scum": {
+        "hands": 50000,
+        "mean_single_groups": 4.47588,
+        "hands_with_single_rate": 0.99582,
+        "mean_pair_groups": 2.72382,
+        "hands_with_pair_rate": 0.97054,
+        "mean_triple_groups": 0.86888,
+        "hands_with_triple_rate": 0.66268,
+        "mean_four_kind_groups": 0.11746,
+        "hands_with_four_kind_rate": 0.11596,
+        "mean_bomb_cards": 0.03654,
+        "hands_with_bomb_rate": 0.0347
+      }
+    }
+  }
+}

@@ -44,7 +44,15 @@ def simulate(games=1000, seed=42, max_actions=10000):
                        rng=random.Random(deck_seed))
         for actions in range(1, max_actions + 1):
             player = round_._actor()
-            round_.apply_action(player, clients[player].respond(round_.message_for(player)))
+            # BasicClient uses only its legal actions and the public history.
+            # Building a full protocol snapshot would deepcopy the complete
+            # event history for every response, which dominates large runs.
+            message = {
+                "player": player,
+                "events": round_.events,
+                "request": {"type": round_.phase, "legal_actions": round_.legal_actions(player)},
+            }
+            round_.apply_action(player, clients[player].respond(message))
             if round_.done:
                 break
         else:
