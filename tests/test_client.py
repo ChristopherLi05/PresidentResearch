@@ -2,7 +2,7 @@ import random
 import unittest
 from copy import deepcopy
 
-from src.client import BasicClient, BasicClientPlus, Client
+from src.client import BasicClient, BasicClientPlus, Client, ExperiencedAgent
 from src.president import Game, Round, standard_deck
 from src.tk_client import HumanClient
 from src.tk_four_human_game import PLAYERS as HUMAN_PLAYERS
@@ -116,6 +116,138 @@ class BasicClientPlusTests(unittest.TestCase):
                              top=("10", 1), last="d")
         self.assertEqual(client.respond(round_.message_for("a")),
                          {"type": "bomb", "card": card("2").json()})
+
+
+class ExperiencedAgentTests(unittest.TestCase):
+    def setUp(self):
+        self.client = ExperiencedAgent()
+
+    @staticmethod
+    def _trade_message(cards, *, events=None):
+        return {
+            "player": "a", "hand": [c.json() for c in cards],
+            "events": events or [{"type": "draft_complete"}],
+            "request": {"type": "trade_request", "legal_actions": [
+                {"type": "trade_request", "rank": rank}
+                for rank in ("3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K", "A", "2")
+            ]},
+        }
+
+    def test_trade_priority_creates_quad_before_matching_ace_or_requesting_two(self):
+        message = self._trade_message([card("7", suit) for suit in ("C", "D", "H")] +
+                                      [card("A"), card("2")])
+        self.assertEqual(self.client.respond(message), {"type": "trade_request", "rank": "7"})
+
+    def test_trade_request_is_recalculated_after_a_failure(self):
+        events = [{"type": "draft_complete"},
+                  {"type": "trade_requested", "initiator": "a", "receiver": "d",
+                   "rank": "A", "success": False}]
+        message = self._trade_message([card("A"), card("3"), card("4")], events=events)
+        self.assertEqual(self.client.respond(message), {"type": "trade_request", "rank": "2"})
+
+    def test_trade_requests_third_two_only_after_ace_match_is_no_longer_available(self):
+        message = self._trade_message([card("A", "C"), card("A", "D"), card("2", "C"), card("2", "D"),
+                                       card("3"), card("4"), card("5")])
+        self.assertEqual(self.client.respond(message), {"type": "trade_request", "rank": "2"})
+
+    def test_trade_matches_k_q_j_in_descending_rank_order_after_two_failures(self):
+        events = [{"type": "draft_complete"},
+                  {"type": "trade_requested", "initiator": "a", "receiver": "d", "rank": "2", "success": False}]
+        message = self._trade_message([card("J"), card("Q"), card("K"), card("3"), card("4")], events=events)
+        self.assertEqual(self.client.respond(message), {"type": "trade_request", "rank": "K"})
+
+    def test_trade_requests_high_singleton_before_lower_rank_work(self):
+        events = [{"type": "draft_complete"},
+                  {"type": "trade_requested", "initiator": "a", "receiver": "d", "rank": "2", "success": False}]
+        message = self._trade_message([card("3"), card("4")], events=events)
+        self.assertEqual(self.client.respond(message), {"type": "trade_request", "rank": "A"})
+
+    def test_fourth_two_requires_completed_high_rank_work_and_four_group_cover(self):
+        safe_hand = [card(rank, suit) for rank in ("J", "Q", "K", "A") for suit in ("C", "D", "H", "S")]
+        safe_hand += [card("2", "C"), card("2", "D"), card("2", "H")]
+        self.assertEqual(self.client.respond(self._trade_message(safe_hand))["rank"], "2")
+
+    def test_trade_does_not_request_an_unsafe_extra_two(self):
+        message = self._trade_message([card("3"), card("2")])
+        self.assertNotEqual(self.client.respond(message)["rank"], "2")
+
+    def test_trade_return_prefers_a_low_triple_that_becomes_a_pair(self):
+        round_ = ready_round({"a": [card("4", suit) for suit in ("C", "D", "H")] +
+                                    [card("9"), card("2")]})
+        round_.phase = "trade_return"
+        round_._pending_trade = ("a", "d", "4")
+        action = self.client.respond(round_.message_for("a"))
+        self.assertEqual(action["card"]["rank"], "4")
+
+    def test_trade_return_preserves_bomb_safety_and_does_not_return_a_two(self):
+        round_ = ready_round({"a": [card("3"), card("4", "C"), card("4", "D"), card("2", "C"), card("2", "D")]})
+        round_.phase = "trade_return"
+        round_._pending_trade = ("a", "d", "4")
+        action = self.client.respond(round_.message_for("a"))
+        self.assertEqual(action["card"]["rank"], "4")
+
+    def test_trade_return_uses_low_singleton_before_a_pair_or_high_card(self):
+        round_ = ready_round({"a": [card("5"), card("9", "C"), card("9", "D"), card("K"), card("2")]})
+        round_.phase = "trade_return"
+        round_._pending_trade = ("a", "d", "5")
+        self.assertEqual(self.client.respond(round_.message_for("a"))["card"]["rank"], "5")
+
+    def test_completion_declines_only_when_it_would_break_bomb_safety(self):
+        unsafe = {
+            "hand": [c.json() for c in (card("7"), card("3"), card("2", "C"), card("2", "D"))],
+            "request": {"type": "completion", "legal_actions": [
+                {"type": "complete", "cards": [card("7").json()]}, {"type": "decline_completion"},
+            ]},
+        }
+        self.assertEqual(self.client.respond(unsafe), {"type": "decline_completion"})
+        unsafe["hand"] = [card("7").json()]
+        self.assertEqual(self.client.respond(unsafe)["type"], "complete")
+
+    def test_play_spends_a_two_when_ordinary_groups_equal_twos(self):
+        round_ = ready_round({"a": [card("3"), card("4"), card("2", "C"), card("2", "D")],
+                              "b": [card("9")], "c": [card("10")], "d": [card("J")]},
+                             top=("3", 1), last="d")
+        self.assertEqual(self.client.respond(round_.message_for("a"))["type"], "bomb")
+
+    def test_play_finishes_normally_but_never_uses_a_finishing_bomb(self):
+        normal_finish = ready_round({"a": [card("4")], "b": [card("9")], "c": [card("10")], "d": [card("J")]},
+                                   top=("3", 1), last="d")
+        self.assertEqual(self.client.respond(normal_finish.message_for("a")), action_cards(card("4")))
+
+        bomb_escape = ready_round({"a": [card("3"), card("2")], "b": [card("9")], "c": [card("10")], "d": [card("J")]},
+                                  top=("A", 1), last="d")
+        action = self.client.respond(bomb_escape.message_for("a"))
+        self.assertEqual(action["type"], "bomb")
+        self.assertEqual(action["card"]["rank"], "2")
+
+    def test_play_removes_a_singleton_instead_of_splitting_a_pair(self):
+        round_ = ready_round({"a": [card("4", "C"), card("4", "D"), card("5")],
+                              "b": [card("9")], "c": [card("10")], "d": [card("J")]},
+                             top=("3", 1), last="d")
+        self.assertEqual(self.client.respond(round_.message_for("a")), action_cards(card("5")))
+
+    def test_play_uses_low_quad_and_preserves_high_quad_when_other_groups_exist(self):
+        low_quad = ready_round({"a": [card("3", suit) for suit in ("C", "D", "H", "S")] +
+                                      [card("4"), card("2")]})
+        self.assertEqual(self.client.respond(low_quad.message_for("a"))["cards"][0]["rank"], "3")
+
+        high_quad = ready_round({"a": [card("A", suit) for suit in ("C", "D", "H", "S")] +
+                                       [card("3"), card("4"), card("2")]})
+        self.assertEqual(self.client.respond(high_quad.message_for("a"))["cards"][0]["rank"], "3")
+
+    def test_passes_a_low_board_when_every_play_is_a_structure_sacrifice(self):
+        round_ = ready_round({"a": [card("4", "C"), card("4", "D")],
+                              "b": [card("9")], "c": [card("10")], "d": [card("J")]},
+                             top=("3", 1), last="d")
+        self.assertEqual(self.client.respond(round_.message_for("a")), {"type": "pass"})
+
+    def test_dangerous_opponent_prevents_a_sacrifice_pass(self):
+        round_ = ready_round({"a": [card("4", "C"), card("4", "D")],
+                              "b": [card("9")], "c": [card("10")], "d": [card("J")]},
+                             top=("3", 1), last="d")
+        round_.events.extend({"type": "played", "player": "b", "cards": [card("9").json()]}
+                             for _ in range(11))
+        self.assertEqual(self.client.respond(round_.message_for("a"))["type"], "play")
 
 
 class HumanClientTests(unittest.TestCase):

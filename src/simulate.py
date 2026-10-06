@@ -16,14 +16,21 @@ PLAYERS = ("a", "b", "c", "d")  # Fixed counterclockwise seats.
 def play_round(round_, clients, *, max_actions, trial_label="trial"):
     """Play ``round_`` with the supplied clients and return its action count.
 
-    The compact message contains every field used by the built-in deterministic
-    clients. Keeping it here avoids repeatedly deep-copying a growing public
-    event log during large simulations.
+    The compact message contains the complete private/public state required by
+    protocol clients, without repeatedly deep-copying a growing public event
+    log during large simulations.
     """
     for actions in range(1, max_actions + 1):
         player = round_._actor()
         message = {
             "player": player,
+            "hand": [card.json() for card in round_._sorted_hand(player)],
+            "top": None if round_.top_rank is None else {
+                "rank": round_.top_rank, "count": round_.top_count,
+                "stack_count": round_.top_stack_count,
+            },
+            "players": round_.players,
+            "active_players": round_._active_in_order(),
             "events": round_.events,
             "request": {"type": round_.phase, "legal_actions": round_.legal_actions(player)},
         }
