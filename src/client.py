@@ -81,3 +81,23 @@ class BasicClient(Client):
         # The engine also polls players who cannot complete, and a turn may
         # have no playable cards. Only then is a pass/decline necessary.
         return actions[0]
+
+
+class BasicClientPlus(BasicClient):
+    """A :class:`BasicClient` that bombs instead of playing J or higher.
+
+    Completion, drafting, and trade decisions use the base policy. On a normal
+    turn, a legal bomb replaces the lowest ordinary legal play when that play
+    is J, Q, K, or A.
+    """
+
+    def respond(self, message: Mapping[str, Any]) -> dict[str, Any]:
+        request = message.get("request")
+        if request and not any(a["type"] == "complete" for a in request["legal_actions"]):
+            ordinary_plays = [a for a in request["legal_actions"] if a["type"] == "play"]
+            bombs = [a for a in request["legal_actions"] if a["type"] == "bomb"]
+            if (ordinary_plays and bombs
+                    and min(RANK_VALUE[a["cards"][0]["rank"]]
+                            for a in ordinary_plays) >= RANK_VALUE["J"]):
+                return bombs[0]
+        return super().respond(message)

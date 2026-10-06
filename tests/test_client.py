@@ -2,7 +2,7 @@ import random
 import unittest
 from copy import deepcopy
 
-from src.client import BasicClient, Client
+from src.client import BasicClient, BasicClientPlus, Client
 from src.president import Game, Round, standard_deck
 from src.tk_client import HumanClient
 from src.tk_four_human_game import PLAYERS as HUMAN_PLAYERS
@@ -41,6 +41,13 @@ class BasicClientTests(unittest.TestCase):
         action = self.client.respond(round_.message_for("a"))
         self.assertEqual(action, {"type": "bomb", "card": card("2").json()})
         round_.apply_action("a", action)
+
+    def test_plays_jack_before_bomb(self):
+        round_ = ready_round({"a": [card("J"), card("2")],
+                              "b": [card("Q")], "c": [card("K")], "d": [card("A")]},
+                             top=("10", 1), last="d")
+        self.assertEqual(self.client.respond(round_.message_for("a")),
+                         action_cards(card("J")))
 
     def test_passes_only_when_unable_to_play(self):
         round_ = ready_round({"a": [card("3")], "b": [card("9")],
@@ -99,6 +106,16 @@ class BasicClientTests(unittest.TestCase):
     def test_rejects_messages_without_a_request(self):
         with self.assertRaisesRegex(ValueError, "no legal action"):
             self.client.respond({"request": None})
+
+
+class BasicClientPlusTests(unittest.TestCase):
+    def test_bombs_replace_jack_or_higher_ordinary_plays(self):
+        client = BasicClientPlus()
+        round_ = ready_round({"a": [card("J"), card("2")],
+                              "b": [card("Q")], "c": [card("K")], "d": [card("A")]},
+                             top=("10", 1), last="d")
+        self.assertEqual(client.respond(round_.message_for("a")),
+                         {"type": "bomb", "card": card("2").json()})
 
 
 class HumanClientTests(unittest.TestCase):

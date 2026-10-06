@@ -56,6 +56,8 @@ Engine protocol and tests:
   and returns its lowest card. Each new exchange starts requesting at 2 again. It only passes or declines a
   completion when no play or completion is possible. Use it with
   `game.run({player: BasicClient() for player in game.players})` after importing it from `src.client`.
+- `src.client.BasicClientPlus` retains the `BasicClient` policy, but uses a legal bomb instead of its lowest
+  ordinary J, Q, K, or A play.
 - `src.tk_client.HumanClient` is a Tkinter `Client` implementation for a local human player. It renders each
   private protocol request and blocks until the user selects one of the engine-provided legal actions. Run
   `python -m src.tk_client` to play successive rounds as `you` against three `BasicClient` opponents. After each
@@ -99,6 +101,20 @@ The printed table shows the count and probability of each next-round placement c
 plus mean placement (lower is better). This measures the combined effect of the role rules under the basic
 agent's policy. The optional JSON output records every trial's starting roles, final placements, deck seed,
 and action count. Change `--games` or `--seed` to run another experiment.
+
+2v2 policy comparison:
+
+```sh
+pip install -r requirements.txt
+python test.py src.client:BasicClientPlus src.client:BasicClient --trials-per-configuration 10000 --seed 42
+```
+
+This runs 60,000 independent later-round games: 10,000 for each of the six ways to assign the evaluated policy
+to two of the four seats. The paired seats use identical client policies, client instances are reset for every
+game, and each configuration uses the same fixed deal and starting-rank assignments. The report gives each policy's mean placement
+with a 95% confidence interval, placement counts, completion rate, and action and bomb averages for both policies.
+It also breaks final placement down by initial rank. Add `--output results/match.json` to save every trial record.
+The command displays a `tqdm` progress bar while it runs.
 
 Round-ending analysis:
 

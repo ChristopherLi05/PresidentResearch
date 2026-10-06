@@ -13,6 +13,26 @@ from src.president import ROLE_NAMES, Round
 PLAYERS = ("a", "b", "c", "d")  # Fixed counterclockwise seats.
 
 
+def play_round(round_, clients, *, max_actions, trial_label="trial"):
+    """Play ``round_`` with the supplied clients and return its action count.
+
+    The compact message contains every field used by the built-in deterministic
+    clients. Keeping it here avoids repeatedly deep-copying a growing public
+    event log during large simulations.
+    """
+    for actions in range(1, max_actions + 1):
+        player = round_._actor()
+        message = {
+            "player": player,
+            "events": round_.events,
+            "request": {"type": round_.phase, "legal_actions": round_.legal_actions(player)},
+        }
+        round_.apply_action(player, clients[player].respond(message))
+        if round_.done:
+            return actions
+    raise RuntimeError(f"{trial_label} reached the action limit ({max_actions})")
+
+
 def role_assignments(games, rng):
     """Randomize roles in blocks of four, balancing each role across seats."""
     for start in range(0, games, 4):
@@ -42,21 +62,8 @@ def simulate(games=1000, seed=42, max_actions=10000):
         deck_seed = deck_rng.getrandbits(64)
         round_ = Round(PLAYERS, first_round=False, roles=roles,
                        rng=random.Random(deck_seed))
-        for actions in range(1, max_actions + 1):
-            player = round_._actor()
-            # BasicClient uses only its legal actions and the public history.
-            # Building a full protocol snapshot would deepcopy the complete
-            # event history for every response, which dominates large runs.
-            message = {
-                "player": player,
-                "events": round_.events,
-                "request": {"type": round_.phase, "legal_actions": round_.legal_actions(player)},
-            }
-            round_.apply_action(player, clients[player].respond(message))
-            if round_.done:
-                break
-        else:
-            raise RuntimeError(f"trial {trial} reached the action limit ({max_actions})")
+        actions = play_round(round_, clients, max_actions=max_actions,
+                             trial_label=f"trial {trial}")
         records.append({"trial": trial, "deck_seed": deck_seed, "starting_roles": roles,
                         "placements": dict(round_.rankings), "actions": actions})
     return {"games": games, "seed": seed, "agent": "BasicClient", "players": list(PLAYERS),
