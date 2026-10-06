@@ -14,7 +14,7 @@ from pathlib import Path
 import random
 from typing import Any, Callable, Mapping, Optional
 
-from src.client import Client
+from src.agent import Agent
 from src.president import ROLE_NAMES, Round
 from src.simulate import PLAYERS, play_round, role_assignments
 
@@ -23,7 +23,7 @@ TEAM_CONFIGURATIONS = tuple(combinations(PLAYERS, 2))
 Z_95 = 1.96
 
 
-def client_factory(specification: str) -> Callable[[], Client]:
+def client_factory(specification: str) -> Callable[[], Agent]:
     """Resolve a client specified as ``package.module:ClassName``."""
     try:
         module_name, class_name = specification.split(":", 1)
@@ -32,7 +32,7 @@ def client_factory(specification: str) -> Callable[[], Client]:
         raise ValueError(
             f"client must be package.module:ClassName, not {specification!r}"
         ) from error
-    if not isinstance(candidate, type) or not issubclass(candidate, Client):
+    if not isinstance(candidate, type) or not issubclass(candidate, Agent):
         raise ValueError(f"{specification!r} must name a Client subclass")
     return candidate
 
@@ -91,7 +91,7 @@ def summarize(records: list[Mapping[str, Any]], team: str) -> dict[str, Any]:
     }
 
 
-def run_match(evaluated_client: type[Client], opposing_client: type[Client], *,
+def run_match(evaluated_client: type[Agent], opposing_client: type[Agent], *,
               trials_per_configuration: int = 10_000, seed: int = 42,
               max_actions: int = 10_000, progress: Optional[Any] = None) -> dict[str, Any]:
     """Run six paired-seat configurations against the same deal seeds.
@@ -102,8 +102,8 @@ def run_match(evaluated_client: type[Client], opposing_client: type[Client], *,
     """
     if trials_per_configuration <= 0 or max_actions <= 0:
         raise ValueError("trials_per_configuration and max_actions must be positive")
-    if not (isinstance(evaluated_client, type) and issubclass(evaluated_client, Client)
-            and isinstance(opposing_client, type) and issubclass(opposing_client, Client)):
+    if not (isinstance(evaluated_client, type) and issubclass(evaluated_client, Agent)
+            and isinstance(opposing_client, type) and issubclass(opposing_client, Agent)):
         raise ValueError("both clients must be Client subclasses")
 
     seed_rng = random.Random(seed)

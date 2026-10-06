@@ -2,7 +2,7 @@ import random
 import unittest
 from copy import deepcopy
 
-from src.client import BasicClient, BasicClientPlus, Client, ExperiencedAgent
+from src.agent import BasicAgent, BasicAgentPlus, Agent, ExperiencedAgent
 from src.president import Game, Round, standard_deck
 from src.tk_client import HumanClient
 from src.tk_four_human_game import PLAYERS as HUMAN_PLAYERS
@@ -12,7 +12,7 @@ from tests.test_president import PLAYERS, action_cards, card, ready_round
 
 class BasicClientTests(unittest.TestCase):
     def setUp(self):
-        self.client = BasicClient()
+        self.client = BasicAgent()
 
     def test_plays_lowest_rank_even_when_pass_and_bomb_are_offered_first(self):
         round_ = ready_round({"a": [card("10"), card("J"), card("2")],
@@ -97,7 +97,7 @@ class BasicClientTests(unittest.TestCase):
     def test_basic_clients_finish_multiple_rounds_using_only_json_messages(self):
         for seed in range(3):
             game = Game(PLAYERS, rng=random.Random(seed))
-            clients = {p: BasicClient() for p in PLAYERS}
+            clients = {p: BasicAgent() for p in PLAYERS}
             for _ in range(3):
                 round_ = game.start_round()
                 self.assertIs(game.run(clients, max_actions=2000), round_)
@@ -110,7 +110,7 @@ class BasicClientTests(unittest.TestCase):
 
 class BasicClientPlusTests(unittest.TestCase):
     def test_bombs_replace_jack_or_higher_ordinary_plays(self):
-        client = BasicClientPlus()
+        client = BasicAgentPlus()
         round_ = ready_round({"a": [card("J"), card("2")],
                               "b": [card("Q")], "c": [card("K")], "d": [card("A")]},
                              top=("10", 1), last="d")
@@ -253,12 +253,12 @@ class ExperiencedAgentTests(unittest.TestCase):
 class HumanClientTests(unittest.TestCase):
     def test_is_a_client_without_creating_a_window(self):
         client = HumanClient()
-        self.assertIsInstance(client, Client)
+        self.assertIsInstance(client, Agent)
         self.assertIsNone(client._root)
 
     def test_omniscient_client_is_a_human_protocol_client(self):
         from src.tk_client import OmniscientHumanClient
-        self.assertIsInstance(OmniscientHumanClient(), Client)
+        self.assertIsInstance(OmniscientHumanClient(), Agent)
 
     def test_auto_declines_a_completion_when_there_is_no_possible_completion(self):
         client = HumanClient()
@@ -330,7 +330,7 @@ class HumanClientTests(unittest.TestCase):
         self.assertEqual(len(set(HUMAN_PLAYERS)), 4)
 
 
-class ObservingClient(BasicClient):
+class ObservingAgent(BasicAgent):
     def __init__(self):
         super().__init__()
         self.observations = []
@@ -343,7 +343,7 @@ class GameNotificationTests(unittest.TestCase):
     def test_run_broadcasts_initial_and_post_action_state_to_connected_clients(self):
         game = Game(PLAYERS)
         game.round = ready_round({"a": [card("7")], "b": [card("8")]})
-        clients = {player: ObservingClient() for player in ("a", "b")}
+        clients = {player: ObservingAgent() for player in ("a", "b")}
         game.run(clients, max_actions=1)
         for client in clients.values():
             self.assertEqual(len(client.observations), 2)

@@ -7,7 +7,7 @@ to that window while all four clients use the normal engine protocol.
 
 from __future__ import annotations
 
-from src.client import Client
+from src.agent import Agent
 from src.president import Game
 from src.tk_client import HumanClient
 
@@ -20,7 +20,7 @@ def main() -> None:
     humans = {
         player: HumanClient(title=f"President — {player}") for player in PLAYERS
     }
-    clients: dict[str, Client] = humans
+    clients: dict[str, Agent] = humans
     try:
         while True:
             game.start_round()

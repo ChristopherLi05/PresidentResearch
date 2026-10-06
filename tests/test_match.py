@@ -1,13 +1,13 @@
 import unittest
 
-from src.client import BasicClient, BasicClientPlus
+from src.agent import BasicAgent, BasicAgentPlus
 from test import TEAM_CONFIGURATIONS, format_report, run_match
 
 
 class MatchTests(unittest.TestCase):
     def test_pairings_reuse_deal_seeds_and_report_metrics(self):
         progress = _Progress()
-        result = run_match(BasicClientPlus, BasicClient, trials_per_configuration=4, seed=7,
+        result = run_match(BasicAgentPlus, BasicAgent, trials_per_configuration=4, seed=7,
                            progress=progress)
 
         self.assertEqual(result["games"], 24)
@@ -26,7 +26,7 @@ class MatchTests(unittest.TestCase):
 
     def test_invalid_trial_limit_is_rejected(self):
         with self.assertRaises(ValueError):
-            run_match(BasicClient, BasicClientPlus, trials_per_configuration=0)
+            run_match(BasicAgent, BasicAgentPlus, trials_per_configuration=0)
 
 
 class _Progress:

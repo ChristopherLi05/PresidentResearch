@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 import random
 
-from src.client import BasicClient
+from src.agent import BasicAgent
 from src.president import ROLE_NAMES, Round
 
 
@@ -63,7 +63,7 @@ def simulate(games=1000, seed=42, max_actions=10000):
     master = random.Random(seed)
     role_rng = random.Random(master.getrandbits(64))
     deck_rng = random.Random(master.getrandbits(64))
-    clients = {player: BasicClient() for player in PLAYERS}
+    clients = {player: BasicAgent() for player in PLAYERS}
     records = []
     for trial, roles in enumerate(role_assignments(games, role_rng), 1):
         deck_seed = deck_rng.getrandbits(64)

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from src.client import BasicClient, Client
+from src.agent import BasicAgent, Agent
 from src.president import Game, RANK_VALUE, Round
 from src.tk_client import OmniscientHumanClient
 
@@ -33,7 +33,7 @@ def omniscient_message(round_: Round, player: str) -> dict[str, Any]:
     return message
 
 
-def run(game: Game, human: OmniscientHumanClient, clients: dict[str, Client]) -> Round:
+def run(game: Game, human: OmniscientHumanClient, clients: dict[str, Agent]) -> Round:
     """Run one round while continuously refreshing the omniscient display."""
     assert game.round is not None
     while not game.round.done:
@@ -52,8 +52,8 @@ def run(game: Game, human: OmniscientHumanClient, clients: dict[str, Client]) ->
 def main() -> None:
     game = Game(PLAYERS)
     human = OmniscientHumanClient(title="President — Omniscient view")
-    clients: dict[str, Client] = {"you": human}
-    clients.update({player: BasicClient() for player in PLAYERS if player != "you"})
+    clients: dict[str, Agent] = {"you": human}
+    clients.update({player: BasicAgent() for player in PLAYERS if player != "you"})
     try:
         while True:
             game.start_round()

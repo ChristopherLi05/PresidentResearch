@@ -18,7 +18,7 @@ from pathlib import Path
 import random
 from typing import Any, Iterable
 
-from src.client import BasicClient
+from src.agent import BasicAgent
 from src.president import ROLE_NAMES, Round
 from src.simulate import PLAYERS
 from src.verify_simulation import load_result, verify_role_balance
@@ -67,7 +67,7 @@ def analyze_result(result: dict[str, Any]) -> dict[str, Any]:
     }
 
     for record in result["records"]:
-        clients = {player: BasicClient() for player in PLAYERS}
+        clients = {player: BasicAgent() for player in PLAYERS}
         round_ = Round(
             PLAYERS,
             first_round=False,

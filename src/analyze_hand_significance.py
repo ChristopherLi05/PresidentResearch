@@ -21,7 +21,7 @@ from statistics import NormalDist
 from typing import Any
 
 from src.analyze_starting_hands import hand_features
-from src.client import BasicClient
+from src.agent import BasicAgent
 from src.president import ROLE_NAMES, Round
 from src.simulate import PLAYERS
 from src.verify_simulation import load_result, verify_role_balance
@@ -38,7 +38,7 @@ def post_trade_samples(result: dict[str, Any]) -> dict[int, dict[str, list[int]]
         for role in range(1, 5)
     }
     for record in result["records"]:
-        clients = {player: BasicClient() for player in PLAYERS}
+        clients = {player: BasicAgent() for player in PLAYERS}
         round_ = Round(
             PLAYERS,
             first_round=False,

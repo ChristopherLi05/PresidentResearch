@@ -5,7 +5,7 @@ import random
 from src.president import RANK_VALUE
 
 
-class Client:
+class Agent:
     """Base class for a JSON-protocol player. Override :meth:`respond`.
 
     Hosts may also call :meth:`observe` with state snapshots between turns.
@@ -20,7 +20,7 @@ class Client:
         raise NotImplementedError
 
 
-class RandomClient(Client):
+class RandomAgent(Agent):
     """Example client: passes half the time when passing is legal, else acts randomly."""
 
     def __init__(self, rng: Optional[random.Random] = None) -> None: self.rng = rng or random.Random()
@@ -32,7 +32,7 @@ class RandomClient(Client):
         return self.rng.choice([a for a in actions if a not in passes] or actions)
 
 
-class BasicClient(Client):
+class BasicAgent(Agent):
     """Always act when possible, playing low and drafting/requesting high.
 
     Equal-rank plays prefer the largest group. Trade returns use the lowest
@@ -84,7 +84,7 @@ class BasicClient(Client):
         return actions[0]
 
 
-class BasicClientPlus(BasicClient):
+class BasicAgentPlus(BasicAgent):
     """A :class:`BasicClient` that bombs instead of playing J or higher.
 
     Completion, drafting, and trade decisions use the base policy. On a normal
@@ -104,7 +104,7 @@ class BasicClientPlus(BasicClient):
         return super().respond(message)
 
 
-class ExperiencedAgent(Client):
+class ExperiencedAgent(Agent):
     """A hand-shape-aware President policy.
 
     Unlike :class:`BasicClient`, this client deliberately manages ordinary

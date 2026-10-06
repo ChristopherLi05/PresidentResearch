@@ -12,7 +12,7 @@ import tkinter as tk
 from tkinter import messagebox, ttk
 from typing import Any, Mapping, Optional
 
-from src.client import BasicClient, Client
+from src.agent import BasicAgent, Agent
 from src.president import Game
 
 
@@ -21,7 +21,7 @@ RED_SUITS = {"D", "H"}
 ROLE_NAMES = ("President", "Vice President", "Vice Scum", "Scum")
 
 
-class HumanClient(Client):
+class HumanClient(Agent):
     """A blocking Tk implementation of the engine's request/response protocol.
 
     Each call to :meth:`respond` displays the supplied private state and waits
@@ -506,8 +506,8 @@ def main() -> None:
     players = ("you", "north", "west", "east")
     game = Game(players)
     human = HumanClient()
-    clients: dict[str, Client] = {"you": human}
-    clients.update({player: BasicClient() for player in players if player != "you"})
+    clients: dict[str, Agent] = {"you": human}
+    clients.update({player: BasicAgent() for player in players if player != "you"})
     try:
         while True:
             game.start_round()

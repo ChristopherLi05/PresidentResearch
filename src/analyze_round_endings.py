@@ -12,7 +12,7 @@ from pathlib import Path
 import random
 from typing import Any, Iterable, Mapping
 
-from src.client import BasicClient
+from src.agent import BasicAgent
 from src.president import ROLE_NAMES, Round
 
 
@@ -77,7 +77,7 @@ def analyze(records: Iterable[Mapping[str, Any]], players: Iterable[str]) -> dic
             roles=record["starting_roles"],
             rng=random.Random(record["deck_seed"]),
         )
-        clients = {player: BasicClient() for player in players}
+        clients = {player: BasicAgent() for player in players}
         responses_since_clear = 0
         decisions_since_clear = 0
         while not round_.done:

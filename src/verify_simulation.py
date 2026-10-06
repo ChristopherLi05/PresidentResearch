@@ -14,7 +14,7 @@ from pathlib import Path
 import random
 from typing import Any
 
-from src.client import BasicClient
+from src.agent import BasicAgent
 from src.president import ROLE_NAMES, Round
 from src.simulate import PLAYERS, placement_counts
 
@@ -65,7 +65,7 @@ def verify_role_balance(result: dict[str, Any]) -> None:
 
 def replay(result: dict[str, Any]) -> None:
     """Replay every deal and compare its recorded outcome to the engine result."""
-    clients = {player: BasicClient() for player in PLAYERS}
+    clients = {player: BasicAgent() for player in PLAYERS}
     for record in result["records"]:
         round_ = Round(
             PLAYERS,

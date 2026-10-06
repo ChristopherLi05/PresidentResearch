@@ -9,7 +9,7 @@ from copy import deepcopy
 from itertools import combinations
 import json
 
-from src.client import RandomClient
+from src.agent import RandomAgent
 from src.president import Card, Game, IllegalAction, Round, standard_deck
 
 
@@ -377,7 +377,7 @@ def test_round_finished_is_emitted_once():
 
 def test_game_persists_roles_and_random_client_uses_json_protocol():
     game = Game(PLAYERS, rng=random.Random(4))
-    clients = {p: RandomClient(random.Random(i)) for i, p in enumerate(PLAYERS)}
+    clients = {p: RandomAgent(random.Random(i)) for i, p in enumerate(PLAYERS)}
     first = game.start_round()
     game.run(clients)
     roles = game.finish_round()
@@ -653,14 +653,14 @@ def test_game_run_accepts_finishing_on_exact_action_limit():
     with raises(RuntimeError, match="action limit"):
         game.run({}, max_actions=0)
     assert not game.round.done
-    assert game.run({"a": RandomClient(random.Random(0))}, max_actions=1) is game.round
+    assert game.run({"a": RandomAgent(random.Random(0))}, max_actions=1) is game.round
     assert game.round.done
     assert game.run({}, max_actions=0) is game.round
 
 
 def test_start_round_rejects_every_unfinished_phase_without_changing_the_game():
     game = Game(PLAYERS, rng=random.Random(4))
-    clients = {p: RandomClient(random.Random(i)) for i, p in enumerate(PLAYERS)}
+    clients = {p: RandomAgent(random.Random(i)) for i, p in enumerate(PLAYERS)}
     observed = set()
     for _ in range(2):
         round_ = game.start_round()
@@ -836,7 +836,7 @@ def exercise_seeded_games(seed_count):
     deck_counts = Counter(standard_deck())
     for seed in range(seed_count):
         game = Game(PLAYERS, rng=random.Random(seed))
-        clients = {p: RandomClient(random.Random(seed * 4 + i)) for i, p in enumerate(PLAYERS)}
+        clients = {p: RandomAgent(random.Random(seed * 4 + i)) for i, p in enumerate(PLAYERS)}
         for _ in range(3):
             round_ = game.start_round()
             gameplay = GameplayChecks(round_)
