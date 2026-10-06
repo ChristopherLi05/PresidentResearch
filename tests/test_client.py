@@ -134,6 +134,41 @@ class HumanClientTests(unittest.TestCase):
             {"player": "c", "label": "played", "cards": [card("7").json()]},
         ])
 
+    def test_card_history_keeps_prior_turns_after_a_public_board_clear(self):
+        history = HumanClient.card_history({"events": [
+            {"type": "played", "player": "a", "cards": [card("7").json()]},
+            {"type": "board_cleared", "player": "a"},
+            {"type": "played", "player": "a", "cards": [card("8").json()]},
+        ]})
+        self.assertEqual(history, [
+            {"player": "a", "label": "played", "cards": [card("7").json()]},
+            {"player": "a", "label": "played", "cards": [card("8").json()]},
+        ])
+
+    def test_public_activity_includes_trade_outcome_and_board_clear(self):
+        activity = HumanClient.public_activity({"events": [
+            {"type": "trade_requested", "initiator": "a", "receiver": "d", "rank": "A", "success": False},
+            {"type": "trade_completed", "initiator": "a", "receiver": "d"},
+            {"type": "board_cleared", "player": "b"},
+        ]})
+        self.assertEqual(activity, [
+            "Trade: a requested A from d — not available",
+            "Trade complete: a exchanged with d",
+            "Board cleared — b leads",
+        ])
+
+    def test_turn_history_keeps_public_events_across_a_board_clear(self):
+        history = HumanClient.turn_history({"events": [
+            {"type": "played", "player": "a", "cards": [card("7").json()]},
+            {"type": "board_cleared", "player": "a"},
+            {"type": "trade_requested", "initiator": "a", "receiver": "d", "rank": "A", "success": True},
+        ]})
+        self.assertEqual(history, [
+            "1. a played: 7♣",
+            "2. Board cleared; a leads",
+            "3. a requested A from d (available)",
+        ])
+
     def test_multi_card_action_is_available_regardless_of_click_order(self):
         client = HumanClient()
         first, second = card("7", "C").json(), card("7", "H").json()
@@ -168,6 +203,13 @@ class GameNotificationTests(unittest.TestCase):
 
 
 class OmniscientGameTests(unittest.TestCase):
+    def test_state_includes_public_seating_and_later_round_roles(self):
+        roles = dict(zip(PLAYERS, range(1, 5)))
+        round_ = Round(PLAYERS, first_round=False, roles=roles, deck=standard_deck())
+        message = round_.message_for("a")
+        self.assertEqual(message["players"], list(PLAYERS))
+        self.assertEqual(message["roles"], roles)
+
     def test_omniscient_message_contains_every_hand(self):
         round_ = Round(PLAYERS, first_round=True, deck=standard_deck())
         message = omniscient_message(round_, "a")

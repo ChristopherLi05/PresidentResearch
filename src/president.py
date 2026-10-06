@@ -128,6 +128,10 @@ class Round:
             "type": "state", "player": player, "phase": self.phase,
             "hand": [c.json() for c in self._sorted_hand(player)],
             "turn": actor, "top": None if self.top_rank is None else {"rank": self.top_rank, "count": self.top_count, "stack_count": self.top_stack_count},
+            # Seating and previous-round roles are public.  They let a UI keep
+            # every client at the same stable table layout without exposing
+            # another player's hand.
+            "players": self.players[:], "roles": deepcopy(self.roles),
             "active_players": self._active_in_order(), "events": deepcopy(self.events),
             "request": request, "rankings": deepcopy(self.rankings),
         }

@@ -64,6 +64,8 @@ The host calls `Round.message_for(player)`. It returns an independent snapshot, 
 | `turn` | Player who is currently expected to respond; `null` when finished. |
 | `top` | `null` on a cleared board. Otherwise, the current rank, required counter-play count, and contiguous matching `stack_count`. |
 | `active_players` | Players still participating in the round. |
+| `players` | Public table order, used to keep player seats stable in a client UI. |
+| `roles` | Previous-round placements for later rounds (`1` President through `4` Scum); empty in the first round. |
 | `events` | Complete public event history. |
 | `request` | Present only when the named player is the current actor; otherwise `null`. |
 | `rankings` | `null` until the round has finished; then a player-to-placement map. |
@@ -196,4 +198,3 @@ A decline applies only to that individual window; it does not prevent a completi
 - A network adapter should preserve private delivery of `hand` and `request`.
 - The public `events` stream is sufficient for clients such as `BasicClient` to infer failed trade ranks without retaining private state.
 - Treat the state and event objects as snapshots: the engine returns independent copies, so mutation by a client does not change engine state.
-

@@ -18,6 +18,7 @@ from src.president import Game
 
 SUIT_SYMBOLS = {"C": "♣", "D": "♦", "H": "♥", "S": "♠"}
 RED_SUITS = {"D", "H"}
+ROLE_NAMES = ("President", "Vice President", "Vice Scum", "Scum")
 
 
 class HumanClient(Client):
@@ -43,6 +44,8 @@ class HumanClient(Client):
         self._selected: list[dict[str, str]] = []
         self._answer: Optional[dict[str, Any]] = None
         self._waiting: Optional[tk.BooleanVar] = None
+        self._history_window: Optional[tk.Toplevel] = None
+        self._history_text: Optional[tk.Text] = None
         self._closed = False
 
     def respond(self, message: Mapping[str, Any]) -> dict[str, Any]:
@@ -113,6 +116,7 @@ class HumanClient(Client):
         toolbar = ttk.Frame(root, padding=(12, 10))
         toolbar.pack(fill="x")
         ttk.Label(toolbar, text="You are playing President", font=("TkDefaultFont", 12, "bold")).pack(side="left")
+        ttk.Button(toolbar, text="Turn history", command=self._show_turn_history).pack(side="right", padx=(0, 6))
         ttk.Button(toolbar, text="Clear selection", command=self._clear_selection).pack(side="right")
 
         self._canvas = tk.Canvas(root, bg=self.TABLE_COLOR, highlightthickness=0)
@@ -135,6 +139,7 @@ class HumanClient(Client):
         for child in self._actions.winfo_children():
             child.destroy()
         self._draw_table()
+        self._refresh_turn_history()
         self._draw_action_buttons()
 
     def _draw_table(self) -> None:
@@ -147,17 +152,22 @@ class HumanClient(Client):
         message = self._message
         if message is None:
             return
-        canvas.create_text(width // 2, 70, text="PRESIDENT", fill="white", font=("TkDefaultFont", 15, "bold"))
-        canvas.create_text(width // 2, 103, text=f"Current response: {message.get('turn')}", fill="#d9f0dd")
+        self._draw_seats(canvas, width, height, message)
+        canvas.create_text(width // 2, 108, text="PRESIDENT", fill="white", font=("TkDefaultFont", 15, "bold"))
         top = message.get("top")
         table_text = "TABLE CLEARED" if top is None else f"TOP: {top['count']} × {top['rank']}"
         canvas.create_text(width // 2, 135, text=table_text, fill="#c8e6c9", font=("TkDefaultFont", 16, "bold"))
         canvas.create_text(width // 2, 158, text="Active: " + ", ".join(message["active_players"]), fill="white")
+        activity = self.public_activity(message)
+        if activity:
+            canvas.create_text(width // 2, 180, text=activity[-1], fill="#e6f4e8",
+                               font=("TkDefaultFont", 10, "italic"))
         all_hands = message.get("all_hands")
         if all_hands:
-            history_top = self._draw_omniscient_state(canvas, width, all_hands)
+            self._draw_omniscient_hands(canvas, width, height, message, all_hands)
+            history_top = 202
         else:
-            history_top = 178
+            history_top = 202
         self._draw_card_history(canvas, width, height, message, history_top)
 
         hand = message["hand"]
@@ -175,20 +185,57 @@ class HumanClient(Client):
                                font=("TkDefaultFont", 14, "bold"), tags=(tag,))
             canvas.tag_bind(tag, "<Button-1>", lambda _event, value=card: self._toggle_card(value))
 
-    def _draw_omniscient_state(self, canvas: tk.Canvas, width: int,
-                                all_hands: Mapping[str, list[Mapping[str, str]]]) -> int:
-        """Draw the intentionally non-private hands/piles used by the debug client."""
-        entries = list(all_hands.items())
-        split = (len(entries) + 1) // 2
-        for index, (owner, cards) in enumerate(entries):
-            column, row = (0, index) if index < split else (1, index - split)
-            x = 14 if column == 0 else width // 2 + 14
-            y = 18 + row * 74
-            canvas.create_text(x, y, text=f"{owner} ({len(cards)})", anchor="nw",
-                               fill="#e6f4e8", font=("TkDefaultFont", 8, "bold"))
-            for card_index, card in enumerate(cards):
-                self._draw_card_face(canvas, x + card_index * 21, y + 14, 24, 36, card, font_size=7)
-        return max(178, 18 + ((len(entries) + 1) // 2) * 74 + 8)
+    def _draw_seats(self, canvas: tk.Canvas, width: int, height: int,
+                    message: Mapping[str, Any]) -> None:
+        """Put each player name, role, and turn marker at a table seat."""
+        active = set(message.get("active_players", []))
+        for player, (x, y, anchor) in self._seat_layout(width, height, message).items():
+            status = self._position_label(player, message)
+            if player not in active and not message.get("rankings"):
+                status = "Finished"
+            turn_marker = "  < TURN" if player == message.get("turn") else ""
+            color = "#ffe082" if player == message.get("turn") else "#ffffff"
+            canvas.create_text(x, y, text=player + turn_marker, anchor=anchor, fill=color,
+                               font=("TkDefaultFont", 11, "bold"))
+            canvas.create_text(x, y + 18, text=status, anchor=anchor, fill="#d9f0dd",
+                               font=("TkDefaultFont", 9))
+
+    @staticmethod
+    def _seat_layout(width: int, height: int, message: Mapping[str, Any]) -> dict[str, tuple[int, int, str]]:
+        """Rotate public player order so the local client is always at bottom."""
+        players = list(message.get("players") or message.get("active_players", []))
+        viewer = message.get("player")
+        if viewer in players:
+            start = players.index(viewer)
+            players = players[start:] + players[:start]
+        locations = ((width // 2, height - 154, "center"), (96, height // 2 - 26, "w"),
+                     (width // 2, 48, "center"), (width - 96, height // 2 - 26, "e"))
+        return {player: location for player, location in zip(players, locations)}
+
+    @staticmethod
+    def _position_label(player: str, message: Mapping[str, Any]) -> str:
+        rankings = message.get("rankings") or {}
+        if player in rankings:
+            place = rankings[player]
+            suffix = {1: "st", 2: "nd", 3: "rd"}.get(place, "th")
+            return f"{place}{suffix} place"
+        role = (message.get("roles") or {}).get(player)
+        if isinstance(role, int) and 1 <= role <= len(ROLE_NAMES):
+            return ROLE_NAMES[role - 1]
+        return "In play"
+
+    def _draw_omniscient_hands(self, canvas: tk.Canvas, width: int, height: int,
+                                message: Mapping[str, Any],
+                                all_hands: Mapping[str, list[Mapping[str, str]]]) -> None:
+        """Place visible opponents' hands beside their table locations."""
+        for owner, (x, y, anchor) in self._seat_layout(width, height, message).items():
+            if owner == message.get("player"):
+                continue
+            cards = all_hands.get(owner, [])
+            total = 24 + max(0, len(cards) - 1) * 20
+            start_x = x - total // 2 if anchor == "center" else (x if anchor == "w" else x - total)
+            for index, card in enumerate(cards):
+                self._draw_card_face(canvas, start_x + index * 20, y + 34, 24, 36, card, font_size=7)
 
     def _draw_card_history(self, canvas: tk.Canvas, width: int, height: int,
                            message: Mapping[str, Any], history_top: int) -> None:
@@ -235,9 +282,41 @@ class HumanClient(Client):
         canvas.create_text(x + 4, y + 4, text=self._card_label(card), anchor="nw", fill=color,
                            font=("TkDefaultFont", font_size, "bold"))
 
+    def _show_turn_history(self) -> None:
+        """Open a live, scrollable log of this round's public turns."""
+        assert self._root is not None
+        if self._history_window is None or not self._history_window.winfo_exists():
+            window = tk.Toplevel(self._root)
+            window.title(f"{self.title} - Turn history")
+            window.geometry("560x500")
+            window.minsize(420, 280)
+            text = tk.Text(window, wrap="word", state="disabled", padx=10, pady=10)
+            scrollbar = ttk.Scrollbar(window, command=text.yview)
+            text.configure(yscrollcommand=scrollbar.set)
+            scrollbar.pack(side="right", fill="y")
+            text.pack(fill="both", expand=True)
+            window.protocol("WM_DELETE_WINDOW", window.withdraw)
+            self._history_window, self._history_text = window, text
+        self._refresh_turn_history()
+        self._history_window.deiconify()
+        self._history_window.lift()
+
+    def _refresh_turn_history(self) -> None:
+        if self._history_text is None or self._message is None:
+            return
+        if self._history_window is None or not self._history_window.winfo_exists():
+            self._history_window, self._history_text = None, None
+            return
+        lines = self.turn_history(self._message)
+        self._history_text.configure(state="normal")
+        self._history_text.delete("1.0", "end")
+        self._history_text.insert("1.0", "\n".join(lines) or "No public turns yet.")
+        self._history_text.configure(state="disabled")
+        self._history_text.see("end")
+
     @staticmethod
     def card_history(message: Mapping[str, Any]) -> list[dict[str, Any]]:
-        """Return public card events formatted for the centered table history."""
+        """Return the public card-event timeline for the whole round."""
         labels = {
             "opening_play": "opened",
             "played": "played",
@@ -254,6 +333,64 @@ class HumanClient(Client):
                 cards = [event["card"]]
             result.append({"player": event["player"], "label": labels[event["type"]],
                            "cards": deepcopy(cards)})
+        return result
+
+    @staticmethod
+    def public_activity(message: Mapping[str, Any]) -> list[str]:
+        """Format public trade and board events without revealing returned cards."""
+        result = []
+        for event in message.get("events", []):
+            kind = event.get("type")
+            if kind == "trade_requested":
+                outcome = "available" if event["success"] else "not available"
+                result.append(f"Trade: {event['initiator']} requested {event['rank']} from {event['receiver']} — {outcome}")
+            elif kind == "trade_completed":
+                result.append(f"Trade complete: {event['initiator']} exchanged with {event['receiver']}")
+            elif kind == "trades_complete":
+                result.append(f"Trades complete — {event['first_player']} leads")
+            elif kind == "board_cleared":
+                result.append(f"Board cleared — {event['player']} leads")
+            elif kind == "player_done":
+                result.append(f"{event['player']} is out")
+            elif kind == "twos_announced":
+                result.append(f"{event['player']} has only 2s and is out")
+        return result
+
+    @staticmethod
+    def turn_history(message: Mapping[str, Any]) -> list[str]:
+        """Return the complete, public round history for the scrollable log."""
+        result = []
+        for number, event in enumerate(message.get("events", []), start=1):
+            kind = event.get("type")
+            if kind == "round_started":
+                result.append(f"{number}. Round started")
+            elif kind == "pile_chosen":
+                result.append(f"{number}. {event['player']} chose pile {event['pile'] + 1}")
+            elif kind == "draft_complete":
+                result.append(f"{number}. Draft complete")
+            elif kind == "trade_requested":
+                outcome = "available" if event["success"] else "not available"
+                result.append(f"{number}. {event['initiator']} requested {event['rank']} from {event['receiver']} ({outcome})")
+            elif kind == "trade_completed":
+                result.append(f"{number}. {event['initiator']} completed a trade with {event['receiver']}")
+            elif kind == "trades_complete":
+                result.append(f"{number}. Trades complete; {event['first_player']} leads")
+            elif kind in {"opening_play", "played", "completed"}:
+                cards = ", ".join(HumanClient._card_label(card) for card in event["cards"])
+                action = {"opening_play": "opened", "played": "played", "completed": "completed"}[kind]
+                result.append(f"{number}. {event['player']} {action}: {cards}")
+            elif kind == "passed":
+                result.append(f"{number}. {event['player']} passed")
+            elif kind == "bombed":
+                result.append(f"{number}. {event['player']} bombed with {HumanClient._card_label(event['card'])}")
+            elif kind == "board_cleared":
+                result.append(f"{number}. Board cleared; {event['player']} leads")
+            elif kind == "player_done":
+                result.append(f"{number}. {event['player']} is out")
+            elif kind == "twos_announced":
+                result.append(f"{number}. {event['player']} has only 2s and is out")
+            elif kind == "round_finished":
+                result.append(f"{number}. Round finished")
         return result
 
     def _draw_action_buttons(self) -> None:
