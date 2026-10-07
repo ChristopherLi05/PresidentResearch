@@ -106,7 +106,7 @@ and action count. Change `--games` or `--seed` to run another experiment.
 
 ```sh
 pip install -r requirements.txt
-python test.py src.client:BasicClientPlus src.client:BasicClient --trials-per-configuration 10000 --seed 42
+python arena.py src.client:BasicClientPlus src.client:BasicClient --trials-per-configuration 10000 --seed 42
 ```
 
 This runs 60,000 independent later-round games: 10,000 for each of the six ways to assign the evaluated policy

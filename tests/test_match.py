@@ -1,7 +1,7 @@
 import unittest
 
 from src.agent import BasicAgent, BasicAgentPlus
-from test import TEAM_CONFIGURATIONS, format_report, run_match
+from arena import TEAM_CONFIGURATIONS, format_report, run_match
 
 
 class MatchTests(unittest.TestCase):
