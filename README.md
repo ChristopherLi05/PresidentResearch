@@ -104,6 +104,21 @@ and action count. Change `--games` or `--seed` to run another experiment.
 
 2v2 policy comparison:
 
+`src.agent.ExperiencedAgent2` is a second experienced policy; the original
+`ExperiencedAgent` remains available. It tracks publicly played ranks, estimates
+opponent responses from unseen cards and remaining hand sizes, uses soft costs
+for hand structure and bomb cover, and looks ahead to the next lead after a
+bomb or completion. Defensive scoring considers board width, matching-rank skips,
+and out-of-turn completions. Trades evaluate receiving and returning cards together.
+These probabilities assume uniformly distributed unseen cards; they do not infer
+private hands from passes. Drafting still chooses the highest exposed pile top.
+
+Compare the two versions with:
+
+```sh
+python arena.py src.agent:ExperiencedAgent2 src.agent:ExperiencedAgent --trials-per-configuration 1000 --seed 42
+```
+
 ```sh
 pip install -r requirements.txt
 python arena.py src.client:BasicClientPlus src.client:BasicClient --trials-per-configuration 10000 --seed 42
