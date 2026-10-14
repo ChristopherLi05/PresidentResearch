@@ -531,3 +531,285 @@ class ExperiencedAgent2(ExperiencedAgent):
                 values.append(self._trade_value(final, returned, outside, opponents))
             return min(values), -RANK_VALUE[rank]
         return min(candidates, key=score)
+
+
+class SwitchPAgent(ExperiencedAgent):
+    """Port of switch+'s kou2 evaluation/rules and keep_kou2 conservation.
+
+    See docs/switchp.md for source mapping and necessary President rule changes.
+    No ExperiencedAgent2 scoring, probabilities or lookahead are used. The
+    six-policy tournament selector is not part of this single-policy port.
+    """
+
+    STRONG = 86
+
+    def __init__(self, rng: Optional[random.Random] = None) -> None:
+        self.rng = rng or random.Random(0)
+        self._prediction_results: dict[str, list[int]] = {}
+        self._finished_seen = False
+
+    @classmethod
+    def _public_info(cls, message):
+        unseen = Counter({r: 4 for r in RANK_VALUE})
+        unseen.subtract(cls._counts(message["hand"]))
+        for event in message.get("events", []):
+            if event["type"] in {"opening_play", "played", "completed"}:
+                unseen.subtract(cls._counts(event.get("cards", [])))
+            elif event["type"] == "bombed":
+                unseen[event["card"]["rank"]] -= 1
+        counts = cls._opponent_counts(message)
+        active = message.get("active_players", message.get("players", []))
+        opponents = [counts[p] for p in active
+                     if p != message.get("player") and counts.get(p, 0) > 0]
+        return Counter({r: max(0, n) for r, n in unseen.items()}), opponents
+
+    @classmethod
+    def _strength(cls, rank, width, unseen, opponents, stack=None):
+        """value_strong's integer x; 100 is the starting strength, not 100%."""
+        stack = width if stack is None else stack
+        if stack == 4:
+            return 200  # President clear replaces the source's 8-clear bonus.
+        value = 100
+        players = len(opponents) + 1
+        largest = max(opponents, default=0)
+        for other in RANK_VALUE:
+            if other == "2" or RANK_VALUE[other] < RANK_VALUE[rank]:
+                continue
+            copies = unseen[other]
+            if min(copies, largest) < width:
+                continue
+            if width == 1 or players == 2:
+                value -= 30
+            else:
+                k = copies - width - players + 5
+                value -= 4 if k <= 0 else 9 if k == 1 else 15 if k == 2 else 24
+        # Our bombs and out-of-turn completions can interrupt any non-clear.
+        # Count them explicitly; neither is the source's wild-card Joker.
+        if largest and unseen["2"]:
+            value -= 30
+        if min(largest, unseen[rank]) >= 4 - stack:
+            value -= 30
+        return max(1, value)
+
+    @classmethod
+    def _pattern(cls, counts, unseen, opponents):
+        """pat_make/value_strong: rank groups, x, z, 1min and 2min."""
+        groups = [(r, counts[r], cls._strength(r, counts[r], unseen, opponents))
+                  for r in RANK_VALUE if r != "2" and counts[r] > 0]
+        strengths = sorted(x for _, _, x in groups)
+        highest = max((RANK_VALUE[r] for r in RANK_VALUE
+                       if r != "2" and unseen[r]), default=0)
+        z = 0
+        for rank, width, x in groups:
+            if width == 4:
+                continue  # Source z skips groups of four or more.
+            if x <= 30:
+                z += 2
+            elif x <= 60:
+                z += 1
+            elif x >= 91:
+                z -= width if RANK_VALUE[rank] >= highest else 1
+        return {"groups": groups, "count": len(groups), "z": z,
+                "minimum": strengths[0] if strengths else 201,
+                "second": strengths[1] if len(strengths) > 1 else 201}
+
+    @classmethod
+    def _lead_priority(cls, rank, width, x, pattern):
+        """The source's y priorities, including its second-minimum branch."""
+        if pattern["second"] >= cls.STRONG:
+            if x < cls.STRONG:
+                return 2
+            if pattern["second"] >= 100:
+                return 41 if x > 100 else x - 60
+            return 9 if x > 100 else 110 - x
+        if cls.STRONG <= x <= 100:
+            return 110 - x
+        # Source ord numbers 3 as 1, ..., A as 12.
+        ordinal = RANK_VALUE[rank] - RANK_VALUE["3"] + 1
+        priority = 40 + 2 * (14 - ordinal)
+        priority += 8 if x > 100 else 4 * sum(n == width for _, n, _ in pattern["groups"])
+        if pattern["count"] >= 5 and rank == "3":
+            priority -= 7
+        return priority
+
+    @classmethod
+    def _accept_follow(cls, before, after, strength, width):
+        """kou_followgroup's ordered tests; return acceptance and adjusted z'."""
+        z = after["z"] - int(strength >= cls.STRONG)
+        if strength < cls.STRONG and after["count"] >= before["count"]:
+            z += 1
+        if strength >= cls.STRONG and after["second"] >= cls.STRONG:
+            return True, z
+        if strength > 100 and after["count"] <= before["count"]:
+            return True, z
+        if strength > cls.STRONG and after["count"] >= 4 and after["count"] - 1 <= z:
+            return False, z
+        if after["minimum"] <= 50 and after["second"] == 201 and strength <= 60:
+            return False, z
+        if after["second"] >= cls.STRONG:
+            return True, z
+        if width == 1 and z >= 4 and 40 <= strength <= 70:
+            return False, z
+        return z <= before["z"], z
+
+    @staticmethod
+    def _predict_leader(message):
+        """keep_kou2's first-three-clears and cards-shed strength points."""
+        shed, clears = Counter(), Counter()
+        clear_count = 0
+        for event in message.get("events", []):
+            player = event.get("player")
+            if event["type"] in {"opening_play", "played", "completed"}:
+                shed[player] += len(event.get("cards", []))
+            elif event["type"] == "bombed":
+                shed[player] += 1
+            elif event["type"] == "board_cleared":
+                clears[player] += 1
+                clear_count += 1
+                if clear_count == 3:
+                    break
+        if clear_count < 3:
+            return None
+        best, best_score = None, 5
+        for player in message.get("players", []):
+            n = shed[player]
+            score = 10 if clears[player] == 3 else 2 if clears[player] == 2 else 0
+            score += 3 if n == 4 else 6 if n == 5 else 9 + 4 * (n - 6) if n >= 6 else 0
+            if score > best_score:
+                best, best_score = player, score
+        return best
+
+    def observe(self, message):
+        finished = message.get("rankings")
+        if not finished:
+            self._finished_seen = False
+        elif not self._finished_seen:
+            self._finished_seen = True
+            predicted = self._predict_leader(message)
+            if predicted in finished:
+                result = self._prediction_results.setdefault(predicted, [0, 0])
+                result[0] += int(finished[predicted] == 1)
+                result[1] += 1
+
+    def _keep(self, message, action, unseen, opponents):
+        """keep_kou2: conserve K+ on weak hands; spare strong A/2 groups."""
+        rank, width = action["cards"][0]["rank"], len(action["cards"])
+        if RANK_VALUE[rank] < RANK_VALUE["K"] or width == 4:
+            return False
+        if rank == "A" and width in (2, 3):
+            return False
+        events = message.get("events", [])
+        if any(e["type"] in {"player_done", "twos_announced"} for e in events):
+            return False
+        # Reconstruct the post-trade initial hand and the hand after clear #2,
+        # allowing stateless request-only hosts to use the same conditions.
+        initial = self._counts(message["hand"])
+        clear_count = sum(e["type"] == "board_cleared" for e in events)
+        second_hand = initial.copy()
+        seen_clears = clear_count
+        initial_unseen = unseen.copy()
+        second_unseen = unseen.copy()
+        second_counts = self._opponent_counts(message)
+        for event in reversed(events):
+            if event["type"] == "board_cleared":
+                seen_clears -= 1
+            cards = event.get("cards", []) if event["type"] in {"opening_play", "played", "completed"} else []
+            if event["type"] == "bombed":
+                cards = [event["card"]]
+            if event.get("player") == message.get("player"):
+                initial.update(c["rank"] for c in cards)
+                if seen_clears >= 2:
+                    second_hand.update(c["rank"] for c in cards)
+            else:
+                initial_unseen.update(c["rank"] for c in cards)
+                if seen_clears >= 2:
+                    second_unseen.update(c["rank"] for c in cards)
+                    if event.get("player") in second_counts:
+                        second_counts[event["player"]] += len(cards)
+        initial_opponents = [13 for p in message.get("players", []) if p != message.get("player")]
+        second_opponents = [n for p, n in second_counts.items() if p != message.get("player") and n > 0]
+        if clear_count < 3:
+            played = sum(len(e.get("cards", [])) for e in events
+                         if e["type"] in {"opening_play", "played", "completed"})
+            played += sum(e["type"] == "bombed" for e in events)
+            return played < 25 and self._pattern(initial, initial_unseen, initial_opponents)["z"] > 12
+        if self._pattern(second_hand, second_unseen, second_opponents)["z"] <= 8:
+            return False
+        strong_cards = sum(RANK_VALUE[c["rank"]] >= RANK_VALUE["K"] for c in message["hand"])
+        if strong_cards > 2 or not any(unseen[r] for r in RANK_VALUE
+                                      if RANK_VALUE[r] > RANK_VALUE[rank]):
+            return False
+        predicted = self._predict_leader(message)
+        if predicted is None or predicted == message.get("player"):
+            return False
+        players = message.get("players", [])
+        accuracy = sum(wins / total for wins, total in self._prediction_results.values() if total)
+        accuracy /= max(1, len(players))
+        return self.rng.random() < accuracy
+
+    def _play(self, message, actions):
+        self.observe(message)
+        hand = message["hand"]
+        unseen, opponents = self._public_info(message)
+        counts = self._counts(hand)
+        before = self._pattern(counts, unseen, opponents)
+        passes = [a for a in actions if a["type"] == "pass"]
+        ordinary = sorted((a for a in actions if a["type"] == "play"),
+                          key=lambda a: (RANK_VALUE[a["cards"][0]["rank"]], -len(a["cards"])))
+        bombs = [a for a in actions if a["type"] == "bomb"]
+        for action in ordinary:
+            if len(action["cards"]) == len(hand):
+                return action
+        # President-only legality/penalty guard: spend bombs before cover runs out.
+        if bombs and counts["2"] >= before["count"] and before["count"]:
+            return bombs[0]
+        viable = [a for a in ordinary if self._safety(self._without(hand, a["cards"]))[2]]
+        if not passes:  # Must lead; use the original y ordering on whole groups.
+            candidates = viable or ordinary
+            whole = [a for a in candidates if len(a["cards"]) == counts[a["cards"][0]["rank"]]]
+            return max(whole or candidates, key=lambda a: self._lead_priority(
+                a["cards"][0]["rank"], len(a["cards"]),
+                self._strength(a["cards"][0]["rank"], len(a["cards"]), unseen, opponents), before))
+        chosen, chosen_x, chosen_z = None, 0, 0
+        top = message.get("top") or {}
+        for action in viable:
+            rank, width = action["cards"][0]["rank"], len(action["cards"])
+            stack = width + (top.get("stack_count", 0) if rank == top.get("rank") else 0)
+            x = self._strength(rank, width, unseen, opponents, stack)
+            after = self._pattern(self._counts(self._without(hand, action["cards"])), unseen, opponents)
+            accepted, z = self._accept_follow(before, after, x, width)
+            if not accepted:
+                continue
+            if chosen is not None and after["second"] >= self.STRONG:
+                if chosen_x >= self.STRONG > x:
+                    continue
+                if x >= self.STRONG > chosen_x or x > self.STRONG == chosen_x:
+                    chosen, chosen_x, chosen_z = action, x, z
+                    continue
+            if chosen is None or z < chosen_z:
+                chosen, chosen_x, chosen_z = action, x, z
+        if chosen is not None:
+            if self._keep(message, chosen, unseen, opponents):
+                return passes[0]
+            return chosen
+        # Bombs replace the source's standalone control-card fallback, but only
+        # when the remaining ordinary hand has its near-finish shape or top is A.
+        if bombs and before["count"] and (before["second"] >= self.STRONG or top.get("rank") == "A"):
+            return bombs[0]
+        return passes[0]
+
+    def _completion(self, message, actions):
+        # No completion window exists in switch+. Apply the same follow rules
+        # with an immediate-clear strength and the President bomb-cover guard.
+        unseen, opponents = self._public_info(message)
+        before = self._pattern(self._counts(message["hand"]), unseen, opponents)
+        for action in actions:
+            if action["type"] != "complete":
+                continue
+            rest = self._without(message["hand"], action["cards"])
+            if not rest:
+                return action
+            after = self._pattern(self._counts(rest), unseen, opponents)
+            if self._safety(rest)[2] and self._accept_follow(before, after, 200, len(action["cards"]))[0]:
+                return action
+        return next(a for a in actions if a["type"] == "decline_completion")

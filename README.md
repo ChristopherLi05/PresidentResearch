@@ -119,6 +119,19 @@ Compare the two versions with:
 python arena.py src.agent:ExperiencedAgent2 src.agent:ExperiencedAgent --trials-per-configuration 1000 --seed 42
 ```
 
+`src.agent.SwitchPAgent` ports switch+'s shared `kou2` decision engine and
+`keep_kou2` conservation rules, using `ExperiencedAgent` trading unchanged.
+It uses the source's integer group strength (`x`), bucketed hand evaluation
+(`z`), second-weakest strength, lead priorities (`y`), and ordered follow/pass
+tests. President-specific guards
+handle 2-bombs, equal-rank responses, completions, and quad clears.
+The six-strategy tournament selector and Japanese-only mechanics are omitted.
+See [the port notes](docs/switchp.md) for source mapping and exact boundaries.
+
+```sh
+python arena.py src.agent:SwitchPAgent src.agent:ExperiencedAgent2 --trials-per-configuration 1000 --seed 42
+```
+
 ```sh
 pip install -r requirements.txt
 python arena.py src.client:BasicClientPlus src.client:BasicClient --trials-per-configuration 10000 --seed 42
