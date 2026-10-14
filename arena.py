@@ -123,7 +123,13 @@ def summarize(records: list[Mapping[str, Any]], team: str) -> dict[str, Any]:
         "mean_placement_95_ci": [ci_low, ci_high],
         "placement_counts": {place: counts[place] for place in range(1, 5)},
         "twos_rule_by_initial_position": {
-            ROLE_NAMES[rank - 1]: twos_rule_by_initial_rank[rank] for rank in range(1, 5)
+            ROLE_NAMES[rank - 1]: {
+                "finishes": twos_rule_by_initial_rank[rank],
+                "players": len(by_initial_rank[rank]),
+                "percentage": 100 * twos_rule_by_initial_rank[rank] / len(by_initial_rank[rank])
+                if by_initial_rank[rank] else 0.0,
+            }
+            for rank in range(1, 5)
         },
         "board_clear_type_percentages": {
             clear_type: 100 * board_clears[clear_type] / sum(board_clears.values())
@@ -226,8 +232,8 @@ def format_report(result: Mapping[str, Any]) -> str:
             f"  Team mean placement: {summary['mean_placement']:.3f} (95% CI {low:.3f} to {high:.3f})",
             "  Player placements: " + ", ".join(f"{place}: {counts[place]:,}" for place in range(1, 5)),
             "  2-rule finishes by initial position: " + ", ".join(
-                f"{role}: {count:,}"
-                for role, count in summary["twos_rule_by_initial_position"].items()
+                f"{role}: {metrics['percentage']:.1f}%"
+                for role, metrics in summary["twos_rule_by_initial_position"].items()
             ),
             "  Board clears by type: " + ", ".join(
                 f"{BOARD_CLEAR_LABELS[clear_type]}: {percentage:.1f}%"

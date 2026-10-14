@@ -22,7 +22,13 @@ class MatchTests(unittest.TestCase):
             self.assertEqual(len(summary["mean_placement_95_ci"]), 2)
             self.assertEqual(set(summary["placement_by_initial_rank"]),
                              {"President", "Vice President", "Vice Scum", "Scum"})
+            for metrics in summary["twos_rule_by_initial_position"].values():
+                self.assertEqual(metrics["players"], 12)
+                self.assertGreaterEqual(metrics["percentage"], 0)
+                self.assertLessEqual(metrics["percentage"], 100)
         self.assertIn("Final placement by initial rank", format_report(result))
+        self.assertIn("2-rule finishes by initial position", format_report(result))
+        self.assertIn("/12 (", format_report(result))
 
     def test_invalid_trial_limit_is_rejected(self):
         with self.assertRaises(ValueError):
