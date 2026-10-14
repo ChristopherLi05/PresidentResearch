@@ -50,14 +50,8 @@ President is played with a standard 52 card deck with anywhere from 3-6 players.
 
 Engine protocol and tests:
 
-- `src.client.BasicClient` is a deterministic basic agent. It always completes when possible and otherwise plays
-  the lowest legal rank (including a bomb before a forced pass). At the same rank it prefers the largest group.
-  It drafts the available pile with the highest face-up rank, requests trade ranks from 2 down to 3 after failures,
-  and returns its lowest card. Each new exchange starts requesting at 2 again. It only passes or declines a
-  completion when no play or completion is possible. Use it with
-  `game.run({player: BasicClient() for player in game.players})` after importing it from `src.client`.
-- `src.client.BasicClientPlus` retains the `BasicClient` policy, but uses a legal bomb instead of its lowest
-  ordinary J, Q, K, or A play.
+- Agent policy documentation: [docs/agents](docs/agents/). It describes every built
+  policy, including the random, basic, experienced, and SwitchP agents.
 - `src.tk_client.HumanClient` is a Tkinter `Client` implementation for a local human player. It renders each
   private protocol request and blocks until the user selects one of the engine-provided legal actions. Run
   `python -m src.tk_client` to play successive rounds as `you` against three `BasicClient` opponents. After each
@@ -104,29 +98,13 @@ and action count. Change `--games` or `--seed` to run another experiment.
 
 2v2 policy comparison:
 
-`src.agent.ExperiencedAgent2` is a second experienced policy; the original
-`ExperiencedAgent` remains available. It tracks publicly played ranks, estimates
-opponent responses from unseen cards and remaining hand sizes, uses soft costs
-for hand structure and bomb cover, and looks ahead to the next lead after a
-bomb or completion. Defensive scoring considers board width, matching-rank skips,
-and out-of-turn completions. Trades evaluate receiving and returning cards together.
-These probabilities assume uniformly distributed unseen cards; they do not infer
-private hands from passes. Drafting still chooses the highest exposed pile top.
+See [docs/agents](docs/agents/) for the technical decision model of every agent.
 
 Compare the two versions with:
 
 ```sh
 python arena.py src.agent:ExperiencedAgent2 src.agent:ExperiencedAgent --trials-per-configuration 1000 --seed 42
 ```
-
-`src.agent.SwitchPAgent` ports switch+'s shared `kou2` decision engine and
-`keep_kou2` conservation rules, using `ExperiencedAgent` trading unchanged.
-It uses the source's integer group strength (`x`), bucketed hand evaluation
-(`z`), second-weakest strength, lead priorities (`y`), and ordered follow/pass
-tests. President-specific guards
-handle 2-bombs, equal-rank responses, completions, and quad clears.
-The six-strategy tournament selector and Japanese-only mechanics are omitted.
-See [the port notes](docs/switchp.md) for source mapping and exact boundaries.
 
 ```sh
 python arena.py src.agent:SwitchPAgent src.agent:ExperiencedAgent2 --trials-per-configuration 1000 --seed 42

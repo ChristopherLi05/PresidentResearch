@@ -536,7 +536,7 @@ class ExperiencedAgent2(ExperiencedAgent):
 class SwitchPAgent(ExperiencedAgent):
     """Port of switch+'s kou2 evaluation/rules and keep_kou2 conservation.
 
-    See docs/switchp.md for source mapping and necessary President rule changes.
+    See docs/agents/switchp-agent.md for source mapping and rule changes.
     No ExperiencedAgent2 scoring, probabilities or lookahead are used. The
     six-policy tournament selector is not part of this single-policy port.
     """
