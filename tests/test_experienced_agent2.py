@@ -6,8 +6,9 @@ import random
 import unittest
 from unittest.mock import patch
 
-from src.agent import BasicAgent, ExperiencedAgent2
-from src.president import Game
+from src.agent import BasicAgent, ExperiencedAgent2, ExperiencedAgent3
+from src.president import Card, Game, standard_deck
+from src.solver import solve_round
 from tests.test_president import PLAYERS, card, ready_round
 
 
@@ -148,3 +149,92 @@ class ExperiencedAgent2Tests(unittest.TestCase):
                 game.start_round()
                 result = game.run(agents, max_actions=3000)
                 self.assertEqual(set(result.rankings.values()), {1, 2, 3, 4})
+
+
+class ExperiencedAgent3Tests(unittest.TestCase):
+    def test_weak_hand_does_not_force_conservation_of_an_ace(self):
+        round_ = ready_round({
+            "a": [card(r) for r in ("3", "4", "5", "6", "7", "A")],
+            "b": [card("9")], "c": [card("10")], "d": [card("J")],
+        }, top=("Q", 1), last="d")
+        message = round_.message_for("a")
+        before = deepcopy(message)
+        self.assertEqual(ExperiencedAgent2().respond(message)["type"], "play")
+        self.assertEqual(ExperiencedAgent3().respond(message)["type"], "play")
+        self.assertEqual(message, before)
+        # Public history now indicates an opponent has only three cards left.
+        message["events"].append({"type": "played", "player": "b",
+                                  "cards": [c.json() for c in
+                                            [card(r, s) for r in ("8", "9", "10")
+                                             for s in "CDHS"][:10]]})
+        self.assertEqual(ExperiencedAgent3().respond(message)["type"], "play")
+
+    def test_conservation_does_not_prevent_clear_or_forced_lead(self):
+        round_ = ready_round({
+            "a": [card(r) for r in ("3", "4", "5", "6", "7", "A")],
+            "b": [card("9")], "c": [card("10")], "d": [card("J")],
+        }, top=("A", 1), last="d")
+        round_.top_stack_count = 3
+        message = round_.message_for("a")
+        self.assertEqual(ExperiencedAgent3().respond(message), ExperiencedAgent2().respond(message))
+        round_.top_rank = None
+        message = round_.message_for("a")
+        self.assertEqual(ExperiencedAgent3().respond(message), ExperiencedAgent2().respond(message))
+
+    def test_control_reserve_values_support_for_weak_groups(self):
+        base, agent = ExperiencedAgent2(), ExperiencedAgent3()
+        unseen, opponents = Counter(), [("b", 6), ("c", 6)]
+        # Isolate hand shape from probability estimation: one reliable group
+        # supporting weak groups deserves more reserve value than all-weak
+        # groups, while a lone group has nothing left to support.
+        def control(rank, *args):
+            return 1.0 if rank == "A" else 0.0
+        with patch.object(base, "_control", side_effect=control), patch.object(agent, "_control", side_effect=control):
+            for hand in (Counter({"3": 1, "4": 1}), Counter({"A": 1})):
+                self.assertEqual(agent._hand_cost(hand, unseen, opponents),
+                                 base._hand_cost(hand, unseen, opponents))
+            supported = Counter({"3": 1, "4": 1, "A": 1})
+            self.assertLess(agent._hand_cost(supported, unseen, opponents),
+                            base._hand_cost(supported, unseen, opponents))
+
+    def test_reserve_preference_fades_with_progress_and_finish_pressure(self):
+        base, agent = ExperiencedAgent2(), ExperiencedAgent3()
+        hand, unseen = Counter({"3": 1, "4": 1, "A": 1}), Counter()
+        def control(rank, *args):
+            return 1.0 if rank == "A" else 0.0
+        with patch.object(base, "_control", side_effect=control), patch.object(agent, "_control", side_effect=control):
+            def bonus(sizes):
+                opponents = [(str(i), n) for i, n in enumerate(sizes)]
+                return (base._hand_cost(hand, unseen, opponents)
+                        - agent._hand_cost(hand, unseen, opponents))
+            self.assertGreater(bonus([13, 13, 13]), bonus([6, 6, 6]))
+            self.assertGreater(bonus([6, 6, 6]), bonus([2, 2, 2]))
+            # Same total cards: one close opponent reduces patience further.
+            self.assertGreater(bonus([6, 6, 6]), bonus([1, 8, 9]))
+            self.assertEqual(bonus([]), 0)
+            self.assertEqual(bonus([13, 13]), bonus([14, 13]))
+
+    def test_uses_exact_solver_when_two_players_remain(self):
+        # Build a protocol-realistic endgame: every card outside the two
+        # active hands appears in public play history, so the opponent hand is
+        # exactly recoverable without private information.
+        round_ = ready_round({
+            "a": [card("3"), card("4")],
+            "b": [card("5"), card("2")],
+        })
+        remaining = set(standard_deck()) - set(round_.hands["a"] + round_.hands["b"])
+        round_.events = [{"type": "opening_play", "player": "c",
+                          "cards": [next(iter(remaining)).json()]}]
+        used = Card.from_json(round_.events[0]["cards"][0])
+        round_.events.append({"type": "played", "player": "d",
+                              "cards": [c.json() for c in sorted(remaining - {used})]})
+        message = round_.message_for("a")
+        rebuilt = ExperiencedAgent3._endgame_round(message)
+        self.assertIsNotNone(rebuilt)
+        expected = solve_round(rebuilt).best_action
+        self.assertEqual(ExperiencedAgent3().respond(message), expected)
+
+    def test_falls_back_to_experienced_agent2_outside_a_duel(self):
+        round_ = ready_round({"a": [card("3")], "b": [card("4")], "c": [card("5")]})
+        message = round_.message_for("a")
+        self.assertEqual(ExperiencedAgent3().respond(message), ExperiencedAgent2().respond(message))

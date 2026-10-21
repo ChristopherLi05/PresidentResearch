@@ -4,7 +4,8 @@ from math import comb
 from typing import Any, Mapping, Optional
 import random
 
-from src.president import RANK_VALUE
+from src.president import Card, RANK_VALUE, Round, standard_deck
+from src.solver import solve_round
 
 
 class Agent:
@@ -347,6 +348,8 @@ class ExperiencedAgent2(ExperiencedAgent):
     Drafting retains the original policy because only the pile tops are known.
     """
 
+    CONTROL_RESERVE_WEIGHT = 0.0
+
     @classmethod
     def _unseen(cls, message: Mapping[str, Any]) -> Counter[str]:
         unseen = Counter({rank: 4 for rank in RANK_VALUE})
@@ -426,6 +429,27 @@ class ExperiencedAgent2(ExperiencedAgent):
         cost = sum(2.5 + 0.18 * n + (0.45 if n == 1 else 0.0)
                    - 1.7 * self._control(r, n, unseen, opponents)
                    for r, n in ordinary.items())
+        if self.CONTROL_RESERVE_WEIGHT:
+            controls = [self._control(r, n, unseen, opponents)
+                        for r, n in ordinary.items()]
+            # Value control more when it supports other vulnerable groups.
+            # Squaring emphasizes reliable control; saturation gives extra
+            # control groups diminishing value, without rank/phase cutoffs.
+            reserve = sum(p * p for p in controls)
+            support = sum(p * p * sum(1 - q for j, q in enumerate(controls) if i != j)
+                          for i, p in enumerate(controls))
+            # Saving control matters most while opponents still have work
+            # left. Reduce that preference continuously as the round advances
+            # and more sharply when even one opponent is near a finish.
+            # Normalize to 1 at the initial 13-card hands; clamp temporary
+            # trade hands so the bonus never exceeds its configured weight.
+            sizes = [min(13, max(0, size)) for size in opponent_sizes]
+            patience = 0.0
+            if sizes:
+                fullness = sum(sizes) / (13 * len(sizes))
+                closest = min(sizes)
+                patience = fullness * (16 * closest / (13 * (closest + 3)))
+            cost -= self.CONTROL_RESERVE_WEIGHT * patience * support / ((1 + reserve) * len(controls))
         # Splitting pairs/triples provides cover, at the price of extra turns.
         cover = sum(n for n in ordinary.values())
         cost += 2.0 * max(0, twos - (len(ordinary) - 1))
@@ -569,6 +593,135 @@ class ExperiencedAgent2(ExperiencedAgent):
                 values.append(self._trade_value(final, returned, outside, opponents))
             return min(values), -RANK_VALUE[rank]
         return min(candidates, key=score)
+
+
+class ExperiencedAgent3(ExperiencedAgent2):
+    """ExperiencedAgent2 with exact play in a two-player endgame.
+
+    The normal protocol keeps hands private, but no hidden-card guess is
+    needed once exactly two players remain: every card absent from this
+    player's hand and the public play history belongs to the other active
+    player.  This policy rebuilds that small, fully-known position and uses
+    :func:`src.solver.solve_round`; all earlier decisions retain
+    :class:`ExperiencedAgent2`'s policy.
+    """
+
+    CONTROL_RESERVE_WEIGHT = 1.5
+
+    @staticmethod
+    def _publicly_played(message: Mapping[str, Any]) -> list[Card]:
+        cards: list[Card] = []
+        for event in message.get("events", []):
+            if event.get("type") in {"opening_play", "played", "completed"}:
+                cards.extend(Card.from_json(card) for card in event.get("cards", []))
+            elif event.get("type") == "bombed":
+                cards.append(Card.from_json(event["card"]))
+        return cards
+
+    @staticmethod
+    def _completion_source(events: list[Mapping[str, Any]]) -> tuple[str, bool] | None:
+        """Return the action that opened the current completion window."""
+        for index in range(len(events) - 1, -1, -1):
+            event = events[index]
+            kind = event.get("type")
+            if kind not in {"opening_play", "played", "passed"}:
+                continue
+            player = event.get("player")
+            if not isinstance(player, str):
+                return None
+            if kind != "played":
+                return player, False
+            rank = event["cards"][0]["rank"]
+            previous_rank = None
+            for previous in reversed(events[:index]):
+                if previous.get("type") == "board_cleared":
+                    break
+                if previous.get("type") in {"opening_play", "played"}:
+                    previous_rank = previous["cards"][0]["rank"]
+                    break
+            return player, rank == previous_rank
+        return None
+
+    @classmethod
+    def _endgame_round(cls, message: Mapping[str, Any]) -> Round | None:
+        """Hydrate precisely the fields the solver needs from a wire snapshot."""
+        active = list(message.get("active_players", []))
+        player = message.get("player")
+        phase = message.get("request", {}).get("type")
+        if len(active) != 2 or player not in active or phase not in {"play", "completion"}:
+            return None
+
+        # Announced 2s leave a finished player's hand without exposing their
+        # card identities or count.  They therefore cannot be assigned to the
+        # remaining opponent exactly from the private protocol snapshot.
+        if any(event.get("type") == "twos_announced" for event in message.get("events", [])):
+            return None
+
+        try:
+            own_hand = [Card.from_json(card) for card in message["hand"]]
+            played = cls._publicly_played(message)
+        except (KeyError, TypeError, ValueError):
+            return None
+        # A valid game history partitions the deck into cards in our hand,
+        # public cards already played, and the remaining opponent hand.
+        known = own_hand + played
+        if len(known) != len(set(known)):
+            return None
+        deck = set(standard_deck())
+        if any(card not in deck for card in known):
+            return None
+        opponent = next(name for name in active if name != player)
+        opponent_hand = sorted(deck - set(known), key=lambda c: (RANK_VALUE[c.rank], c.suit))
+        if not opponent_hand:
+            return None
+
+        players = list(message.get("players", []))
+        if len(players) != 4 or set(active) - set(players):
+            return None
+        round_ = Round(players, first_round=True, deck=standard_deck())
+        round_.first_round = False  # This is necessarily past the opening play.
+        round_.hands = {name: [] for name in players}
+        round_.hands[player] = own_hand
+        round_.hands[opponent] = opponent_hand
+        round_.active = set(active)
+        round_.phase = phase
+        round_.turn = message.get("turn")
+        top = message.get("top")
+        round_.top_rank = None if top is None else top.get("rank")
+        round_.top_count = 0 if top is None else top.get("count", 0)
+        round_.top_stack_count = 0 if top is None else top.get("stack_count", 0)
+        events = list(message.get("events", []))
+        round_.events = events if any(e.get("type") == "opening_play" for e in events) else [{"type": "opening_play"}]
+        last_play = next((e for e in reversed(events)
+                          if e.get("type") in {"opening_play", "played"}), None)
+        round_.last_player = None if last_play is None else last_play.get("player")
+
+        if phase == "completion":
+            source = cls._completion_source(events)
+            if source is None or round_.turn not in active:
+                return None
+            previous, skip = source
+            order = ([previous] if previous in round_.active else []) + round_._active_after(previous)
+            if round_.turn not in order:
+                return None
+            round_.completion_order = order
+            round_._completion_cursor = order.index(round_.turn)
+            round_._pending_advance = (previous, skip)
+        return round_
+
+    def respond(self, message: Mapping[str, Any]) -> dict[str, Any]:
+        round_ = self._endgame_round(message)
+        if round_ is not None:
+            try:
+                result = solve_round(round_)
+                actions = message["request"]["legal_actions"]
+                if result.player == message["player"] and result.best_action in actions:
+                    return result.best_action
+            except (KeyError, TypeError, ValueError):
+                # Partial protocol snapshots remain supported by the parent
+                # heuristic policy; exact play only needs a complete history.
+                pass
+        return super().respond(message)
 
 
 class SwitchPAgent(ExperiencedAgent):

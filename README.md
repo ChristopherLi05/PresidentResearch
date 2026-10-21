@@ -110,6 +110,21 @@ python arena.py src.agent:ExperiencedAgent2 src.agent:ExperiencedAgent --trials-
 python arena.py src.agent:SwitchPAgent src.agent:ExperiencedAgent2 --trials-per-configuration 1000 --seed 42
 ```
 
+On Windows, `compare_agent.bat` compares one built-in agent to every other
+built-in agent. It uses the parallel arena runner, which executes the six 2v2
+seating configurations on worker threads and writes a JSON report for each
+matchup under `results/comparisons/`:
+
+```bat
+compare_agent.bat ExperiencedAgent3 1000 42 3 2
+```
+
+The arguments after the agent are optional: trials per seating configuration,
+seed, worker-thread count per matchup, and number of concurrently running
+matchups. Defaults are `1000`, `42`, `6`, and `2`. A short class name is
+resolved from `src.agent`; you can also pass a full
+`package.module:ClassName` specification.
+
 ```sh
 pip install -r requirements.txt
 python arena.py src.client:BasicClientPlus src.client:BasicClient --trials-per-configuration 10000 --seed 42
