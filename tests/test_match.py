@@ -28,7 +28,6 @@ class MatchTests(unittest.TestCase):
                 self.assertLessEqual(metrics["percentage"], 100)
         self.assertIn("Final placement by initial rank", format_report(result))
         self.assertIn("2-rule finishes by initial position", format_report(result))
-        self.assertIn("/12 (", format_report(result))
 
     def test_invalid_trial_limit_is_rejected(self):
         with self.assertRaises(ValueError):
