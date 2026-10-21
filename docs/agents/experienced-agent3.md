@@ -24,6 +24,9 @@ other active hand from the full deck: cards are either in its private hand,
 already public through play, or in that opponent's hand. It then asks
 `src.solver.solve_round` for the exact minimax action.
 
+The policy also works with compact request messages that omit `turn`: the
+request recipient is necessarily the current actor.
+
 If a caller supplies an incomplete or malformed state snapshot, it safely
 falls back to the `ExperiencedAgent2` heuristic. It also falls back after a
 previous player announces unplayed 2s, because the protocol does not disclose

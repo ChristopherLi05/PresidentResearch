@@ -9,11 +9,13 @@ For example:
 """
 
 import argparse
+from contextlib import nullcontext
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import json
 import os
 from pathlib import Path
 import random
+from threading import Lock
 from typing import Any, Optional
 
 from src.agent import Agent
@@ -156,6 +158,19 @@ def run_match(
     }
 
 
+class ProgressStream:
+    """Send complete, serialized progress messages to the supervising process."""
+
+    def __init__(self):
+        self.count = 0
+        self.lock = Lock()
+
+    def update(self, amount=1):
+        with self.lock:
+            self.count += amount
+            print(f"@@ARENA_PROGRESS {self.count}", flush=True)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("clients", nargs="+", help="one, two, or four package.module:ClassName agents")
@@ -166,6 +181,7 @@ def main() -> None:
         "--workers", type=positive_int, default=min(os.cpu_count() or 1, len(TEAM_CONFIGURATIONS)),
         help="worker threads, capped at the six seating configurations",
     )
+    parser.add_argument("--progress-stream", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--output", type=Path, help="optional JSON file with trial records")
     args = parser.parse_args()
     if len(args.clients) not in {1, 2, 4}:
@@ -178,7 +194,9 @@ def main() -> None:
 
     classes = [client_factory(specification) for specification in args.clients]
     games = len(TEAM_CONFIGURATIONS) * args.trials_per_configuration if len(classes) == 2 else args.trials_per_configuration
-    with tqdm(total=games, desc="Running parallel arena trials", unit="game") as progress:
+    progress_context = (nullcontext(ProgressStream()) if args.progress_stream else
+                        tqdm(total=games, desc="Running parallel arena trials", unit="game"))
+    with progress_context as progress:
         if len(classes) == 2:
             result = run_match(
                 classes[0], classes[1], trials_per_configuration=args.trials_per_configuration,

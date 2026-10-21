@@ -685,7 +685,9 @@ class ExperiencedAgent3(ExperiencedAgent2):
         round_.hands[opponent] = opponent_hand
         round_.active = set(active)
         round_.phase = phase
-        round_.turn = message.get("turn")
+        # A request is only sent to the current actor, so compact hosts that
+        # omit the redundant public ``turn`` field remain solver-compatible.
+        round_.turn = message.get("turn", player)
         top = message.get("top")
         round_.top_rank = None if top is None else top.get("rank")
         round_.top_count = 0 if top is None else top.get("count", 0)

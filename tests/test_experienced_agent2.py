@@ -234,6 +234,19 @@ class ExperiencedAgent3Tests(unittest.TestCase):
         expected = solve_round(rebuilt).best_action
         self.assertEqual(ExperiencedAgent3().respond(message), expected)
 
+    def test_uses_solver_with_compact_message_without_turn(self):
+        round_ = ready_round({"a": [card("3"), card("4")], "b": [card("5"), card("2")]})
+        remaining = set(standard_deck()) - set(round_.hands["a"] + round_.hands["b"])
+        round_.events = [{"type": "opening_play", "player": "c",
+                          "cards": [next(iter(remaining)).json()]}]
+        used = Card.from_json(round_.events[0]["cards"][0])
+        round_.events.append({"type": "played", "player": "d",
+                              "cards": [c.json() for c in sorted(remaining - {used})]})
+        message = round_.message_for("a")
+        expected = ExperiencedAgent3().respond(message)
+        message.pop("turn")
+        self.assertEqual(ExperiencedAgent3().respond(message), expected)
+
     def test_falls_back_to_experienced_agent2_outside_a_duel(self):
         round_ = ready_round({"a": [card("3")], "b": [card("4")], "c": [card("5")]})
         message = round_.message_for("a")

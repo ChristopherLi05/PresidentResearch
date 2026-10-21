@@ -110,20 +110,31 @@ python arena.py src.agent:ExperiencedAgent2 src.agent:ExperiencedAgent --trials-
 python arena.py src.agent:SwitchPAgent src.agent:ExperiencedAgent2 --trials-per-configuration 1000 --seed 42
 ```
 
-On Windows, `compare_agent.bat` compares one built-in agent to every other
+Run `compare_agent.py` to compare one built-in agent to every other
 built-in agent. It uses the parallel arena runner, which executes the six 2v2
 seating configurations on worker threads and writes a JSON report for each
 matchup under `results/comparisons/`:
 
-```bat
-compare_agent.bat ExperiencedAgent3 1000 42 3 2
+```sh
+python compare_agent.py ExperiencedAgent3 --trials-per-configuration 1000 --seed 42 --parallel-matchups 4
 ```
 
-The arguments after the agent are optional: trials per seating configuration,
-seed, worker-thread count per matchup, and number of concurrently running
-matchups. Defaults are `1000`, `42`, `6`, and `2`. A short class name is
+Only the agent is required. Defaults are 1000 trials per seating configuration,
+seed 42, one worker thread per matchup (`--workers`), and two concurrent
+matchup processes (`--parallel-matchups`). Separate processes provide CPU
+parallelism without sharing a GIL. A short class name is
 resolved from `src.agent`; you can also pass a full
 `package.module:ClassName` specification.
+Each active matchup displays its own `tqdm` progress bar, showing completed
+games and the total for that opponent.
+The parent renders all bars together; full reports print after the comparisons
+finish so they cannot displace active bars. Bars are disabled when output is
+redirected or the console does not identify itself as a terminal.
+Press `Ctrl+C` to stop the runner; it terminates every active matchup process
+and exits with code 130.
+The runner validates positive concurrency limits and supervises child
+processes directly. Launch failures and abnormal
+process exits are reported and cause a nonzero exit code.
 
 ```sh
 pip install -r requirements.txt
