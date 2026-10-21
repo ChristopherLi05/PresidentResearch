@@ -1,8 +1,10 @@
 """Tactical and protocol regressions for the second experienced policy."""
 
 from copy import deepcopy
+from collections import Counter
 import random
 import unittest
+from unittest.mock import patch
 
 from src.agent import BasicAgent, ExperiencedAgent2
 from src.president import Game
@@ -12,6 +14,91 @@ from tests.test_president import PLAYERS, card, ready_round
 class ExperiencedAgent2Tests(unittest.TestCase):
     def setUp(self):
         self.agent = ExperiencedAgent2()
+
+    def test_probability_cache_reuses_inputs(self):
+        self.agent._holding.cache_clear()
+        expected = self.agent._holding.__wrapped__(39, 3, 13, 2)
+        self.assertEqual(self.agent._holding(39, 3, 13, 2), expected)
+        self.assertEqual(self.agent._holding(39, 3, 13, 2), expected)
+        self.assertEqual(self.agent._holding.cache_info().hits, 1)
+
+    def test_control_cache_snapshots_mutable_inputs(self):
+        self.agent._control_cached.cache_clear()
+        unseen = self.agent._unseen({"hand": [], "events": []})
+        opponents = [("b", 5)]
+        original = self.agent._control("A", 1, unseen, opponents)
+        self.assertEqual(self.agent._control("A", 1, unseen.copy(), [("c", 5)]), original)
+        self.assertEqual(self.agent._control_cached.cache_info().hits, 1)
+        unseen["A"] = unseen["2"] = 0
+        self.assertEqual(self.agent._control("A", 1, unseen, opponents), 1.0)
+        self.assertLess(original, 1.0)
+        opponents.append(("d", 3))
+        self.agent._control("A", 1, unseen, opponents)
+        self.assertEqual(self.agent._control_cached.cache_info().misses, 3)
+
+    def test_cached_and_uncached_decisions_match(self):
+        class UncachedAgent(ExperiencedAgent2):
+            _holding = staticmethod(ExperiencedAgent2._holding.__wrapped__)
+            _control_cached = classmethod(ExperiencedAgent2._control_cached.__wrapped__)
+            _hand_cost_cached = ExperiencedAgent2._hand_cost_cached.__wrapped__
+            _lead_cost_cached = ExperiencedAgent2._lead_cost_cached.__wrapped__
+
+        for seed in range(2):
+            game = Game(PLAYERS, rng=random.Random(seed))
+            cached, uncached = self.agent, UncachedAgent()
+            case = self
+
+            class ComparingAgent(ExperiencedAgent2):
+                def respond(self, message):
+                    action = cached.respond(message)
+                    case.assertEqual(action, uncached.respond(message))
+                    return action
+
+            agents = {p: ComparingAgent() for p in PLAYERS}
+            for _ in range(2):
+                game.start_round()
+                game.run(agents, max_actions=3000)
+
+    def test_hand_and_lead_caches_snapshot_all_inputs(self):
+        for name in ("_hand_cost", "_lead_cost"):
+            evaluate = getattr(self.agent, name)
+            cached = getattr(self.agent, name + "_cached")
+            cached.cache_clear()
+            hand = Counter({"3": 1, "A": 2, "2": 1})
+            unseen = self.agent._unseen({"hand": [], "events": []})
+            opponents = [("b", 5)]
+            original = evaluate(hand, unseen, opponents)
+            hits = cached.cache_info().hits
+            self.assertEqual(evaluate(hand.copy(), unseen.copy(), [("c", 5)]), original)
+            self.assertEqual(cached.cache_info().hits, hits + 1)
+            for change in (lambda: hand.update({"3": 1}),
+                           lambda: unseen.update({"A": -1}),
+                           lambda: opponents.append(("d", 3))):
+                change()
+                misses = cached.cache_info().misses
+                actual = evaluate(hand, unseen, opponents)
+                self.assertGreater(cached.cache_info().misses, misses)
+                expected = cached.__wrapped__(self.agent, tuple(hand.items()),
+                    tuple(unseen[r] for r in unseen), tuple(n for _, n in opponents))
+                self.assertEqual(actual, expected)
+
+    def test_finish_skips_scoring_but_bomb_does_not(self):
+        for kind in ("play", "complete"):
+            winning = {"type": kind, "cards": [card("4").json()]}
+            message = {"hand": winning["cards"]}
+            with patch.object(self.agent, "_unseen", side_effect=AssertionError("scored finish")):
+                self.assertIs(self.agent._choose_play(message, [{"type": "pass"}, winning]), winning)
+        bomb = {"type": "bomb", "card": card("2").json()}
+        passed = {"type": "pass"}
+        self.assertIs(self.agent._choose_play({"hand": [bomb["card"]]}, [bomb, passed]), passed)
+
+    def test_trade_returns_score_once_per_rank_and_keep_first_tie(self):
+        hand = [card("3").json(), card("3", "D").json(), card("4").json()]
+        actions = [{"type": "trade_return", "card": c} for c in hand]
+        with patch.object(self.agent, "_trade_value", return_value=1) as score:
+            result = self.agent._trade_return({"hand": hand}, actions)
+        self.assertIs(result, actions[0])
+        self.assertEqual(score.call_count, 2)
 
     def test_bomb_can_improve_a_hand_without_fully_repairing_cover(self):
         round_ = ready_round({

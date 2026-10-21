@@ -21,3 +21,12 @@ each requested rank and returning each possible card, then chooses the exchange
 with the best resulting hand score plus a modest price for giving away strength.
 The estimates assume unseen cards are uniformly distributed; passes do not
 reveal private-hand information.
+
+Probability, control, whole-hand, and next-lead calculations use bounded LRU caches (8,192 entries
+each), shared across decisions. Control keys snapshot unseen counts and ordered
+opponent hand sizes, so changed public information and hypothetical trades use
+their own entries. Caching does not change the scoring formulas.
+Hand cache keys also preserve rank iteration order to keep floating-point ties
+unchanged. Trade returns evaluate only the first legal card of each rank, and
+plays or completions that empty the hand return immediately without scoring
+other actions. Bombs retain their special final-card penalty.

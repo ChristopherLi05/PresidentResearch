@@ -16,6 +16,8 @@ from itertools import combinations
 import random
 from typing import Any, Iterable, Mapping, Optional, Sequence
 
+from src.snapshots import SnapshotHistory, freeze
+
 
 RANKS = ("3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K", "A", "2")
 SUITS = ("C", "D", "H", "S")
@@ -118,22 +120,31 @@ class Round:
 
     def message_for(self, player: str) -> dict[str, Any]:
         """Return an independent snapshot and private request for *player*."""
+        return self._private_message(player, self._public_message(deepcopy(self.events)))
+
+    def _public_message(self, events) -> dict[str, Any]:
+        """Small current-state fields plus the caller's snapshot of public history."""
+        return {
+            "type": "state", "phase": self.phase, "turn": self._actor(),
+            "top": None if self.top_rank is None else {
+                "rank": self.top_rank, "count": self.top_count, "stack_count": self.top_stack_count},
+            "players": self.players[:], "roles": self.roles.copy(),
+            "active_players": self._active_in_order(), "events": events,
+            "rankings": None if self.rankings is None else self.rankings.copy(),
+        }
+
+    def _private_message(self, player: str, public: Mapping[str, Any]) -> dict[str, Any]:
+        """Add only this player's hand and request to a public snapshot."""
         if player not in self.hands:
             raise KeyError(player)
         request: Optional[dict[str, Any]] = None
-        actor = self._actor()
+        actor = public["turn"]
         if actor == player and not self.done:
             request = {"type": self.phase, "legal_actions": self.legal_actions(player)}
         return {
-            "type": "state", "player": player, "phase": self.phase,
+            **public, "player": player,
             "hand": [c.json() for c in self._sorted_hand(player)],
-            "turn": actor, "top": None if self.top_rank is None else {"rank": self.top_rank, "count": self.top_count, "stack_count": self.top_stack_count},
-            # Seating and previous-round roles are public.  They let a UI keep
-            # every client at the same stable table layout without exposing
-            # another player's hand.
-            "players": self.players[:], "roles": deepcopy(self.roles),
-            "active_players": self._active_in_order(), "events": deepcopy(self.events),
-            "request": request, "rankings": deepcopy(self.rankings),
+            "request": request,
         }
 
     def legal_actions(self, player: str) -> list[dict[str, Any]]:
@@ -449,18 +460,32 @@ class Game:
         """Run the current round using in-process clients and return it."""
         if not self.round: self.start_round()
         assert self.round is not None
-        self._notify_clients(clients)
+        history = SnapshotHistory()
+        request = self._notify_clients(clients, history)
         for _ in range(max_actions):
             if self.round.done: return self.round
             player = self.round._actor()
             if player is None: raise RuntimeError("round has no requested player")
-            self.round.apply_action(player, clients[player].respond(self.round.message_for(player)))
-            self._notify_clients(clients)
+            self.round.apply_action(player, clients[player].respond(request))
+            request = self._notify_clients(clients, history)
         if self.round.done: return self.round
         raise RuntimeError("action limit reached")
 
-    def _notify_clients(self, clients: Mapping[str, "Client"]) -> None:
-        """Offer each connected client its latest private snapshot."""
+    def _notify_clients(self, clients: Mapping[str, "Client"],
+                        history: Optional[SnapshotHistory] = None) -> Optional[dict[str, Any]]:
+        """Share frozen public data; keep private fields isolated for every call."""
         assert self.round is not None
+        history = history if history is not None else SnapshotHistory()
+        public = self.round._public_message(None)
+        public = {key: freeze(value) for key, value in public.items() if key != "events"}
+        public["events"] = history.snapshot(self.round.events)
+        request = None
         for player, client in clients.items():
-            client.observe(self.round.message_for(player))
+            message = self.round._private_message(player, public)
+            if message["request"] is not None:
+                # An observer may edit its private fields. Preserve a separate
+                # request, reusing public history and the generated legal actions.
+                request = {**message, "hand": deepcopy(message["hand"]),
+                           "request": deepcopy(message["request"])}
+            client.observe(message)
+        return request

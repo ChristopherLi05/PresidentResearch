@@ -39,6 +39,17 @@ A host owns the `Game` and `Round` objects. It gives the active player a private
 
 The host calls `Round.message_for(player)`. It returns an independent snapshot, with private fields scoped to that player.
 
+`Game.run()` uses an optimized in-process version of the same fields. Public
+containers are read-only mappings and sequences shared across recipients;
+each newly appended event is frozen once and reused in later snapshots. Each
+player still receives their own hand and request in `observe()`. The actor's
+`respond()` call reuses the public snapshot, with separate mutable private
+fields so edits made in `observe()` cannot corrupt the request. Notifications
+still occur initially and after every action, including at round completion.
+Clients should treat public fields as read-only. `deepcopy(message)` produces
+ordinary independent dictionaries and lists for editing or JSON serialization.
+`Round.message_for()` retains its fully mutable, JSON-compatible API.
+
 ```json
 {
   "type": "state",

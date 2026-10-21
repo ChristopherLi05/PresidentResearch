@@ -1,4 +1,5 @@
 from collections import Counter
+from functools import lru_cache
 from math import comb
 from typing import Any, Mapping, Optional
 import random
@@ -358,6 +359,7 @@ class ExperiencedAgent2(ExperiencedAgent):
         return Counter({rank: max(0, n) for rank, n in unseen.items()})
 
     @staticmethod
+    @lru_cache(maxsize=8192)
     def _holding(pool: int, copies: int, hand_size: int, needed: int) -> float:
         """Hypergeometric probability of holding at least needed copies."""
         hand_size = min(hand_size, pool)
@@ -380,21 +382,42 @@ class ExperiencedAgent2(ExperiencedAgent):
     def _control(self, rank: str, width: int, unseen: Counter[str],
                  opponents: list[tuple[str, int]]) -> float:
         """Estimate keeping the lead; a quad clears before anyone responds."""
+        return self._control_cached(rank, width, tuple(unseen[r] for r in RANK_VALUE),
+                                    tuple(size for _, size in opponents))
+
+    @classmethod
+    @lru_cache(maxsize=8192)
+    def _control_cached(cls, rank: str, width: int, unseen_counts: tuple[int, ...],
+                        opponent_sizes: tuple[int, ...]) -> float:
+        # Snapshot all probability inputs: callers mutate Counters during trades.
+        # Player identities do not affect control; preserve size order for exact
+        # floating-point equivalence. Bounded caches can safely span decisions.
         if width == 4:
             return 1.0
+        unseen = dict(zip(RANK_VALUE, unseen_counts))
         pool = sum(unseen.values())
         control = 1.0
-        for _, size in opponents:
-            response = self._holding(pool, unseen["2"], size, 1)
-            response += sum(self._holding(pool, unseen[r], size, width)
+        for size in opponent_sizes:
+            response = cls._holding(pool, unseen["2"], size, 1)
+            response += sum(cls._holding(pool, unseen[r], size, width)
                             for r in RANK_VALUE if r != "2" and RANK_VALUE[r] >= RANK_VALUE[rank])
             # Completion is possible out of turn and has a different width.
-            response += self._holding(pool, unseen[rank], size, 4 - width)
+            response += cls._holding(pool, unseen[rank], size, 4 - width)
             control *= 1.0 - min(1.0, response)
         return control
 
     def _hand_cost(self, counts: Counter[str], unseen: Counter[str],
                    opponents: list[tuple[str, int]]) -> float:
+        return self._hand_cost_cached(tuple(counts.items()), tuple(unseen[r] for r in RANK_VALUE),
+                                      tuple(size for _, size in opponents))
+
+    @lru_cache(maxsize=8192)
+    def _hand_cost_cached(self, hand_items: tuple[tuple[str, int], ...],
+                          unseen_counts: tuple[int, ...], opponent_sizes: tuple[int, ...]) -> float:
+        # Preserve hand iteration order so floating-point sums and ties stay exact.
+        counts = Counter(dict(hand_items))
+        unseen = Counter(dict(zip(RANK_VALUE, unseen_counts)))
+        opponents = [(str(i), size) for i, size in enumerate(opponent_sizes)]
         ordinary = {r: n for r, n in counts.items() if r != "2" and n > 0}
         twos = counts["2"]
         if not ordinary:
@@ -412,6 +435,15 @@ class ExperiencedAgent2(ExperiencedAgent):
     def _lead_cost(self, counts: Counter[str], unseen: Counter[str],
                    opponents: list[tuple[str, int]]) -> float:
         """Evaluate the best forced lead after a bomb or completion."""
+        return self._lead_cost_cached(tuple(counts.items()), tuple(unseen[r] for r in RANK_VALUE),
+                                      tuple(size for _, size in opponents))
+
+    @lru_cache(maxsize=8192)
+    def _lead_cost_cached(self, hand_items: tuple[tuple[str, int], ...],
+                          unseen_counts: tuple[int, ...], opponent_sizes: tuple[int, ...]) -> float:
+        counts = Counter(dict(hand_items))
+        unseen = Counter(dict(zip(RANK_VALUE, unseen_counts)))
+        opponents = [(str(i), size) for i, size in enumerate(opponent_sizes)]
         choices = []
         for rank, n in counts.items():
             if rank == "2" or n <= 0:
@@ -433,6 +465,9 @@ class ExperiencedAgent2(ExperiencedAgent):
         return min(choices) if choices else self._hand_cost(counts, unseen, opponents)
 
     def _choose_play(self, message: Mapping[str, Any], actions: list[dict[str, Any]]) -> dict[str, Any]:
+        for action in actions:
+            if action["type"] in {"play", "complete"} and len(action["cards"]) == len(message["hand"]):
+                return action
         unseen = self._unseen(message)
         opponents = self._opponents(message)
         hand = self._counts(message["hand"])
@@ -501,6 +536,9 @@ class ExperiencedAgent2(ExperiencedAgent):
 
     def _trade_return(self, message: Mapping[str, Any], actions: list[dict[str, Any]]) -> dict[str, Any]:
         unseen, opponents = self._unseen(message), self._opponents(message)
+        by_rank = {}
+        for action in actions:
+            by_rank.setdefault(action["card"]["rank"], action)
         def score(action):
             counts = self._counts(message["hand"])
             rank = action["card"]["rank"]
@@ -508,7 +546,7 @@ class ExperiencedAgent2(ExperiencedAgent):
             outside = unseen.copy()
             outside[rank] += 1
             return self._trade_value(counts, rank, outside, opponents)
-        return min(actions, key=score)
+        return min(by_rank.values(), key=score)
 
     def _trade_rank(self, message: Mapping[str, Any], actions: list[dict[str, Any]]) -> dict[str, Any]:
         hand = self._counts(message["hand"])
