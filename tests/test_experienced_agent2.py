@@ -6,8 +6,8 @@ import random
 import unittest
 from unittest.mock import patch
 
-from src.agent import BasicAgent, ExperiencedAgent2, ExperiencedAgent3
-from src.president import Card, Game, standard_deck
+from src.agent import BasicAgent, ExperiencedAgent2, ExperiencedAgent3, ExperiencedAgent4
+from src.president import Card, Game, RANK_VALUE, standard_deck
 from src.solver import solve_round
 from tests.test_president import PLAYERS, card, ready_round
 
@@ -247,7 +247,44 @@ class ExperiencedAgent3Tests(unittest.TestCase):
         message.pop("turn")
         self.assertEqual(ExperiencedAgent3().respond(message), expected)
 
+    def test_malformed_completion_history_falls_back_to_parent_policy(self):
+        round_ = ready_round({"a": [card("3"), card("4")], "b": [card("5"), card("2")]})
+        round_._offer_completions("a")
+        message = round_.message_for("a")
+        message["events"].append({"type": "played", "player": "b", "cards": []})
+        self.assertEqual(ExperiencedAgent3().respond(message), ExperiencedAgent2().respond(message))
+
     def test_falls_back_to_experienced_agent2_outside_a_duel(self):
         round_ = ready_round({"a": [card("3")], "b": [card("4")], "c": [card("5")]})
         message = round_.message_for("a")
         self.assertEqual(ExperiencedAgent3().respond(message), ExperiencedAgent2().respond(message))
+
+
+class ExperiencedAgent4Tests(unittest.TestCase):
+    def setUp(self):
+        self.agent = ExperiencedAgent4()
+
+    @staticmethod
+    def _unseen(**counts):
+        return Counter({rank: counts.get(rank, 0) for rank in RANK_VALUE})
+
+    def test_next_opponent_bomb_is_a_turn_order_danger(self):
+        unseen = self._unseen(**{"2": 1})
+        danger = self.agent._turn_order_danger(
+            {"type": "pass"}, {"rank": "9", "count": 1, "stack_count": 1},
+            unseen, [("b", 2), ("c", 10)])
+        self.assertEqual(danger, self.agent.NEXT_BOMB_PENALTY)
+
+    def test_matching_play_skips_next_normal_response(self):
+        unseen = self._unseen(**{"10": 1})
+        danger = self.agent._turn_order_danger(
+            {"type": "play", "cards": [card("10").json()]},
+            {"rank": "10", "count": 1, "stack_count": 1}, unseen, [("b", 1)])
+        self.assertEqual(danger, 0.0)
+
+    def test_immediate_clear_has_no_next_opponent_danger(self):
+        unseen = self._unseen(**{"2": 1, "A": 4})
+        danger = self.agent._turn_order_danger(
+            {"type": "play", "cards": [card("A").json() for _ in range(4)]}, {},
+            unseen, [("b", 5)])
+        self.assertEqual(danger, 0.0)

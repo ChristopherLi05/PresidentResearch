@@ -349,6 +349,21 @@ class ExperiencedAgent2(ExperiencedAgent):
     """
 
     CONTROL_RESERVE_WEIGHT = 0.0
+    GROUP_WEIGHT = 2.5
+    CARD_WEIGHT = 0.18
+    SINGLE_WEIGHT = 0.45
+    HAND_CONTROL_WEIGHT = 1.7
+    BOMB_GROUP_PENALTY = 2.0
+    BOMB_COVER_PENALTY = 5.0
+    BOMB_VALUE = 0.8
+    LEAD_CONTROL_WEIGHT = 1.5
+    BOMB_STRANDING_PENALTY = 8.0
+    PASS_COST = 0.4
+    PASS_DANGER_WEIGHT = 2.0
+    CLEAR_COST = 0.35
+    OPPONENT_FINISH_PENALTY = 12.0
+    TRADE_BOMB_COST = 1.2
+    TRADE_RANK_WEIGHT = 0.035
 
     @classmethod
     def _unseen(cls, message: Mapping[str, Any]) -> Counter[str]:
@@ -426,8 +441,8 @@ class ExperiencedAgent2(ExperiencedAgent):
         if not ordinary:
             return 0.0 if not twos else 60.0 + twos
         # Groups represent future turns, but control and singles change their cost.
-        cost = sum(2.5 + 0.18 * n + (0.45 if n == 1 else 0.0)
-                   - 1.7 * self._control(r, n, unseen, opponents)
+        cost = sum(self.GROUP_WEIGHT + self.CARD_WEIGHT * n + (self.SINGLE_WEIGHT if n == 1 else 0.0)
+                   - self.HAND_CONTROL_WEIGHT * self._control(r, n, unseen, opponents)
                    for r, n in ordinary.items())
         if self.CONTROL_RESERVE_WEIGHT:
             controls = [self._control(r, n, unseen, opponents)
@@ -452,9 +467,9 @@ class ExperiencedAgent2(ExperiencedAgent):
             cost -= self.CONTROL_RESERVE_WEIGHT * patience * support / ((1 + reserve) * len(controls))
         # Splitting pairs/triples provides cover, at the price of extra turns.
         cover = sum(n for n in ordinary.values())
-        cost += 2.0 * max(0, twos - (len(ordinary) - 1))
-        cost += 5.0 * max(0, twos - (cover - 1))
-        return cost - 0.8 * twos
+        cost += self.BOMB_GROUP_PENALTY * max(0, twos - (len(ordinary) - 1))
+        cost += self.BOMB_COVER_PENALTY * max(0, twos - (cover - 1))
+        return cost - self.BOMB_VALUE * twos
 
     def _lead_cost(self, counts: Counter[str], unseen: Counter[str],
                    opponents: list[tuple[str, int]]) -> float:
@@ -479,14 +494,23 @@ class ExperiencedAgent2(ExperiencedAgent):
                     choices.append(-20.0)
                     continue
                 control = self._control(rank, width, unseen, opponents)
-                value = self._hand_cost(rest, unseen, opponents) - 1.5 * control
+                value = self._hand_cost(rest, unseen, opponents) - self.LEAD_CONTROL_WEIGHT * control
                 # If nobody beats this lead, we must lead again; all-2s or
                 # a last ordinary group with bombs is a dangerous continuation.
                 ordinary_cards = sum(v for r, v in rest.items() if r != "2")
                 if rest["2"] and ordinary_cards <= rest["2"]:
-                    value += 8.0 * control
+                    value += self.BOMB_STRANDING_PENALTY * control
                 choices.append(value)
         return min(choices) if choices else self._hand_cost(counts, unseen, opponents)
+
+    def _turn_order_danger(self, action: Mapping[str, Any], top: Mapping[str, Any],
+                           unseen: Counter[str], opponents: list[tuple[str, int]]) -> float:
+        """Return an optional candidate-specific danger cost.
+
+        The base policy deliberately has no turn-order feature.  Subclasses
+        can add one without changing ExperiencedAgent2/3 decisions.
+        """
+        return 0.0
 
     def _choose_play(self, message: Mapping[str, Any], actions: list[dict[str, Any]]) -> dict[str, Any]:
         for action in actions:
@@ -503,7 +527,9 @@ class ExperiencedAgent2(ExperiencedAgent):
             kind = action["type"]
             if kind in {"pass", "decline_completion"}:
                 danger = sum(1.0 / size for _, size in opponents if size <= 3)
-                return self._hand_cost(hand, unseen, opponents) + 0.4 + 2.0 * danger
+                return (self._hand_cost(hand, unseen, opponents) + self.PASS_COST
+                        + self.PASS_DANGER_WEIGHT * danger
+                        + self._turn_order_danger(action, top, unseen, opponents))
             cards = self._action_cards(action)
             rank, width = cards[0]["rank"], len(cards)
             key = (kind + rank, width)
@@ -516,7 +542,7 @@ class ExperiencedAgent2(ExperiencedAgent):
             clears = kind in {"bomb", "complete"} or width == 4 or (
                 rank == top.get("rank") and top.get("stack_count", 0) + width == 4)
             if clears:
-                value = 0.35 + self._lead_cost(rest, unseen, opponents)
+                value = self.CLEAR_COST + self._lead_cost(rest, unseen, opponents)
                 ordinary_cards = sum(v for r, v in hand.items() if r != "2")
                 if kind == "bomb" and hand["2"] > ordinary_cards:
                     # Even splitting every group cannot fund these bombs.
@@ -525,7 +551,7 @@ class ExperiencedAgent2(ExperiencedAgent):
                     value = min(value, self._hand_cost(rest, unseen, opponents))
             else:
                 control = self._control(rank, width, unseen, opponents)
-                value = self._hand_cost(rest, unseen, opponents) - 1.5 * control
+                value = self._hand_cost(rest, unseen, opponents) - self.LEAD_CONTROL_WEIGHT * control
                 # A matching response skips the next active seat, but that
                 # player can still complete out of turn.
                 for i, (_, size) in enumerate(opponents):
@@ -536,10 +562,11 @@ class ExperiencedAgent2(ExperiencedAgent):
                     stack = width + (top.get("stack_count", 0) if rank == top.get("rank") else 0)
                     if size == 4 - stack:
                         finish += self._holding(pool, unseen[rank], size, size)
-                    value += 12.0 * min(1.0, finish)
+                    value += self.OPPONENT_FINISH_PENALTY * min(1.0, finish)
                 ordinary_cards = sum(v for r, v in rest.items() if r != "2")
                 if rest["2"] and ordinary_cards <= rest["2"]:
-                    value += 8.0 * control
+                    value += self.BOMB_STRANDING_PENALTY * control
+            value += self._turn_order_danger(action, top, unseen, opponents)
             cache[key] = value
             return value
 
@@ -555,7 +582,7 @@ class ExperiencedAgent2(ExperiencedAgent):
                      opponents: list[tuple[str, int]]) -> float:
         # Charge a modest price for strengthening the recipient, especially
         # with a bomb. The recipient's private matching cards are unknown.
-        gift = 1.2 if returned == "2" else 0.035 * RANK_VALUE[returned]
+        gift = self.TRADE_BOMB_COST if returned == "2" else self.TRADE_RANK_WEIGHT * RANK_VALUE[returned]
         return self._hand_cost(counts, unseen, opponents) + gift
 
     def _trade_return(self, message: Mapping[str, Any], actions: list[dict[str, Any]]) -> dict[str, Any]:
@@ -712,18 +739,100 @@ class ExperiencedAgent3(ExperiencedAgent2):
         return round_
 
     def respond(self, message: Mapping[str, Any]) -> dict[str, Any]:
-        round_ = self._endgame_round(message)
+        try:
+            round_ = self._endgame_round(message)
+        except (AttributeError, IndexError, KeyError, TypeError, ValueError):
+            # Keep the parent policy available when a host sends a partial or
+            # malformed history that cannot be reconstructed exactly.
+            round_ = None
         if round_ is not None:
             try:
                 result = solve_round(round_)
                 actions = message["request"]["legal_actions"]
                 if result.player == message["player"] and result.best_action in actions:
                     return result.best_action
-            except (KeyError, TypeError, ValueError):
+            except (IndexError, KeyError, TypeError, ValueError):
                 # Partial protocol snapshots remain supported by the parent
                 # heuristic policy; exact play only needs a complete history.
                 pass
         return super().respond(message)
+
+
+class ExperiencedAgent4(ExperiencedAgent3):
+    """Experimental successor to :class:`ExperiencedAgent3`.
+
+    It deliberately starts with identical behavior, including the exact
+    two-player endgame solver, except for its turn-order-aware danger cost.
+    New normal-play features and search methods should be developed here so
+    comparisons with ExperiencedAgent3 remain a meaningful baseline.
+    """
+
+    # The existing policy rewards global control.  These weights separately
+    # price the more urgent risk from the opponent who acts next.
+    NEXT_RESPONSE_PENALTY = 1.0
+    NEXT_FINISH_PENALTY = 6.0
+    NEXT_COMPLETION_PENALTY = 1.5
+    NEXT_BOMB_PENALTY = 1.5
+
+    def _turn_order_danger(self, action: Mapping[str, Any], top: Mapping[str, Any],
+                           unseen: Counter[str], opponents: list[tuple[str, int]]) -> float:
+        """Estimate the next opponent's immediate tactical options.
+
+        Probabilities use the same public-information hypergeometric model as
+        the parent policy.  Rank events overlap, so the summed probabilities
+        are capped at one; this is a conservative heuristic, not an exact
+        joint distribution.
+        """
+        if not opponents or action["type"] in {"bomb", "complete"}:
+            return 0.0
+
+        kind = action["type"]
+        if kind in {"pass", "decline_completion"}:
+            if not top:
+                return 0.0
+            rank = top["rank"]
+            width = top["count"]
+            stack = top.get("stack_count", width)
+            next_gets_normal_turn = True
+        else:
+            cards = self._action_cards(action)
+            rank, width = cards[0]["rank"], len(cards)
+            stack = width + (top.get("stack_count", 0) if rank == top.get("rank") else 0)
+            if width == 4 or stack == 4:
+                return 0.0
+            # Matching the board opens a completion window, then skips the
+            # next normal turn. That player can still complete the stack.
+            next_gets_normal_turn = rank != top.get("rank")
+
+        _, size = opponents[0]
+        pool = sum(unseen.values())
+        if size <= 0 or pool <= 0:
+            return 0.0
+
+        normal_response = 0.0
+        bomb = 0.0
+        finish = 0.0
+        if next_gets_normal_turn:
+            normal_response = sum(
+                self._holding(pool, unseen[other], size, width)
+                for other in RANK_VALUE
+                if other != "2" and RANK_VALUE[other] >= RANK_VALUE[rank]
+            )
+            # A 2 immediately clears the board. Do not treat a final lone 2
+            # as a normal tactical finish: this ruleset penalizes it instead.
+            bomb = self._holding(pool, unseen["2"], size, 1) if size > 1 else 0.0
+            if size == width:
+                finish = normal_response
+
+        needed = 4 - stack
+        completion = self._holding(pool, unseen[rank], size, needed) if needed > 0 else 0.0
+        if size == needed:
+            finish = min(1.0, finish + completion)
+
+        return (self.NEXT_RESPONSE_PENALTY * min(1.0, normal_response)
+                + self.NEXT_BOMB_PENALTY * bomb
+                + self.NEXT_FINISH_PENALTY * min(1.0, finish)
+                + self.NEXT_COMPLETION_PENALTY * completion)
 
 
 class SwitchPAgent(ExperiencedAgent):
