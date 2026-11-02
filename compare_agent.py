@@ -11,7 +11,8 @@ from threading import Event, Lock
 
 OPPONENTS = (
     "RandomAgent", "BasicAgent", "BasicAgentPlus", "ExperiencedAgent",
-    "ExperiencedAgent2", "ExperiencedAgent3", "SwitchPAgent",
+    "ExperiencedAgent2", "ExperiencedAgent3", "ExperiencedAgent3Tuned",
+    "ExperiencedAgent4", "SwitchPAgent",
 )
 ROOT = Path(__file__).resolve().parent
 STOPPING = Event()

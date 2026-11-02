@@ -758,6 +758,33 @@ class ExperiencedAgent3(ExperiencedAgent2):
         return super().respond(message)
 
 
+class ExperiencedAgent3Tuned(ExperiencedAgent3):
+    """ExperiencedAgent3 with weights selected by the ES checkpoint.
+
+    The policy retains ExperiencedAgent3's exact two-player endgame solver.
+    Only the inherited heuristic scoring weights differ. Values are copied from
+    ``results/experienced3_es.json`` so arena runners can import this policy
+    without depending on a generated results module.
+    """
+
+    CONTROL_RESERVE_WEIGHT = 1.7336002666902222
+    GROUP_WEIGHT = 3.192850798859009
+    CARD_WEIGHT = 0.0
+    SINGLE_WEIGHT = 0.8410903295588946
+    HAND_CONTROL_WEIGHT = 2.2238177323977313
+    BOMB_GROUP_PENALTY = 2.0176728858951187
+    BOMB_COVER_PENALTY = 4.884632378500758
+    BOMB_VALUE = 0.8564299706364091
+    LEAD_CONTROL_WEIGHT = 1.0164562907204948
+    BOMB_STRANDING_PENALTY = 8.874649688289717
+    PASS_COST = 0.2734239876318853
+    PASS_DANGER_WEIGHT = 2.336944568174645
+    CLEAR_COST = 0.3162716698012512
+    OPPONENT_FINISH_PENALTY = 14.661944128451612
+    TRADE_BOMB_COST = 1.1298037168270516
+    TRADE_RANK_WEIGHT = 0.03073388581995172
+
+
 class ExperiencedAgent4(ExperiencedAgent3):
     """Experimental successor to :class:`ExperiencedAgent3`.
 

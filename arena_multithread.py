@@ -19,7 +19,7 @@ from threading import Lock
 from typing import Any, Optional
 
 from src.agent import Agent
-from src.president import Round
+from src.president_c import Round
 from src.simulate import PLAYERS, play_round, role_assignments
 from arena import (
     TEAM_CONFIGURATIONS,
@@ -52,47 +52,50 @@ def _run_configuration(
             for player in PLAYERS
         }
         round_ = Round(PLAYERS, first_round=False, roles=roles, rng=random.Random(deck_seed))
-        actions = play_round(
-            round_, clients, max_actions=max_actions,
-            trial_label=f"configuration {''.join(configuration)}, trial {trial}",
-        )
-        evaluated_placements = [round_.rankings[player] for player in configuration]
-        records.append({
-            "configuration": list(configuration),
-            "trial": trial,
-            "deck_seed": deck_seed,
-            "starting_roles": roles,
-            "placements": dict(round_.rankings),
-            "evaluated_placements": evaluated_placements,
-            "evaluated_mean_placement": sum(evaluated_placements) / 2,
-            "actions": actions,
-            "evaluated_actions": sum(
-                turn["player"] in evaluated_seats for turn in round_.turn_history
-            ),
-            "opposing_actions": sum(
-                turn["player"] in opposing_seats for turn in round_.turn_history
-            ),
-            "evaluated_bombs": sum(
-                event["type"] == "bombed" and event["player"] in evaluated_seats
-                for event in round_.events
-            ),
-            "opposing_bombs": sum(
-                event["type"] == "bombed" and event["player"] in opposing_seats
-                for event in round_.events
-            ),
-            "evaluated_completion_events": sum(
-                event["type"] == "completed" and event["player"] in evaluated_seats
-                for event in round_.events
-            ),
-            "opposing_completion_events": sum(
-                event["type"] == "completed" and event["player"] in opposing_seats
-                for event in round_.events
-            ),
-            "twos_rule_players": [
-                event["player"] for event in round_.events if event["type"] == "twos_announced"
-            ],
-            "board_clear_events": board_clear_events(round_.events),
-        })
+        try:
+            actions = play_round(
+                round_, clients, max_actions=max_actions,
+                trial_label=f"configuration {''.join(configuration)}, trial {trial}",
+            )
+            evaluated_placements = [round_.rankings[player] for player in configuration]
+            records.append({
+                "configuration": list(configuration),
+                "trial": trial,
+                "deck_seed": deck_seed,
+                "starting_roles": roles,
+                "placements": dict(round_.rankings),
+                "evaluated_placements": evaluated_placements,
+                "evaluated_mean_placement": sum(evaluated_placements) / 2,
+                "actions": actions,
+                "evaluated_actions": sum(
+                    turn["player"] in evaluated_seats for turn in round_.turn_history
+                ),
+                "opposing_actions": sum(
+                    turn["player"] in opposing_seats for turn in round_.turn_history
+                ),
+                "evaluated_bombs": sum(
+                    event["type"] == "bombed" and event["player"] in evaluated_seats
+                    for event in round_.events
+                ),
+                "opposing_bombs": sum(
+                    event["type"] == "bombed" and event["player"] in opposing_seats
+                    for event in round_.events
+                ),
+                "evaluated_completion_events": sum(
+                    event["type"] == "completed" and event["player"] in evaluated_seats
+                    for event in round_.events
+                ),
+                "opposing_completion_events": sum(
+                    event["type"] == "completed" and event["player"] in opposing_seats
+                    for event in round_.events
+                ),
+                "twos_rule_players": [
+                    event["player"] for event in round_.events if event["type"] == "twos_announced"
+                ],
+                "board_clear_events": board_clear_events(round_.events),
+            })
+        finally:
+            round_.close()
         if progress is not None:
             progress.update(1)
     return records

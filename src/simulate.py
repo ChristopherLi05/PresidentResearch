@@ -22,18 +22,22 @@ def play_round(round_, clients, *, max_actions, trial_label="trial"):
     """
     for actions in range(1, max_actions + 1):
         player = round_._actor()
-        message = {
-            "player": player,
-            "hand": [card.json() for card in round_._sorted_hand(player)],
-            "top": None if round_.top_rank is None else {
-                "rank": round_.top_rank, "count": round_.top_count,
-                "stack_count": round_.top_stack_count,
-            },
-            "players": round_.players,
-            "active_players": round_._active_in_order(),
-            "events": round_.events,
-            "request": {"type": round_.phase, "legal_actions": round_.legal_actions(player)},
-        }
+        if hasattr(round_, "_sorted_hand"):
+            message = {
+                "player": player,
+                "hand": [card.json() for card in round_._sorted_hand(player)],
+                "top": None if round_.top_rank is None else {
+                    "rank": round_.top_rank, "count": round_.top_count,
+                    "stack_count": round_.top_stack_count,
+                },
+                "players": round_.players,
+                "active_players": round_._active_in_order(),
+                "events": round_.events,
+                "request": {"type": round_.phase, "legal_actions": round_.legal_actions(player)},
+            }
+        else:
+            # C-backed rounds expose the same public wire-protocol snapshot.
+            message = round_.message_for(player)
         round_.apply_action(player, clients[player].respond(message))
         if round_.done:
             return actions

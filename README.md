@@ -50,6 +50,11 @@ President is played with a standard 52 card deck with anywhere from 3-6 players.
 
 Engine protocol and tests:
 
+- A C11 port with a Python `ctypes` interface is available. Build it with
+  `python -m src.president_c --build`, then import `Game` and `Round` from
+  `src.president_c`. See [C engine usage](docs/c-engine.md) for Python and C
+  examples, compatibility details, and tests.
+
 - Agent policy documentation: [docs/agents](docs/agents/). It describes every built
   policy, including the random, basic, experienced, and SwitchP agents.
 - `src.tk_client.HumanClient` is a Tkinter `Client` implementation for a local human player. It renders each

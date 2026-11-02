@@ -6,7 +6,7 @@ import random
 import unittest
 from unittest.mock import patch
 
-from src.agent import BasicAgent, ExperiencedAgent2, ExperiencedAgent3, ExperiencedAgent4
+from src.agent import BasicAgent, ExperiencedAgent2, ExperiencedAgent3, ExperiencedAgent3Tuned, ExperiencedAgent4
 from src.president import Card, Game, RANK_VALUE, standard_deck
 from src.solver import solve_round
 from tests.test_president import PLAYERS, card, ready_round
@@ -258,6 +258,14 @@ class ExperiencedAgent3Tests(unittest.TestCase):
         round_ = ready_round({"a": [card("3")], "b": [card("4")], "c": [card("5")]})
         message = round_.message_for("a")
         self.assertEqual(ExperiencedAgent3().respond(message), ExperiencedAgent2().respond(message))
+
+
+class ExperiencedAgent3TunedTests(unittest.TestCase):
+    def test_checkpoint_weights_are_available_to_arena_imports(self):
+        agent = ExperiencedAgent3Tuned()
+        self.assertIsInstance(agent, ExperiencedAgent3)
+        self.assertEqual(agent.GROUP_WEIGHT, 3.192850798859009)
+        self.assertEqual(agent.OPPONENT_FINISH_PENALTY, 14.661944128451612)
 
 
 class ExperiencedAgent4Tests(unittest.TestCase):

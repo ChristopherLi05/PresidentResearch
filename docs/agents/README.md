@@ -12,6 +12,7 @@ of those legal actions. They do not inspect opponents' private cards.
 | [ExperiencedAgent](experienced-agent.md) | Hand-shape and 2-cover heuristics using public card totals. |
 | [ExperiencedAgent2](experienced-agent2.md) | Hypergeometric response estimates, soft hand costs, and one-lead lookahead. |
 | ExperiencedAgent3 | ExperiencedAgent2 policy with exact solver play after the game becomes a two-player endgame. |
+| ExperiencedAgent3Tuned | ExperiencedAgent3 with scoring weights selected from `results/experienced3_es.json`. |
 | [SwitchPAgent](switchp-agent.md) | Port of switch+'s integer `x`/`z`/`y` decision rules and `keep_kou2` behavior. |
 
 `BasicAgent` and all experienced policies draft the highest face-up pile;
