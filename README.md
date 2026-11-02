@@ -79,6 +79,67 @@ Engine protocol and tests:
   `python -m unittest discover -s tests -v`). The suite includes deterministic multi-round simulations checking card
   conservation, independently checked gameplay legality and turn/board transitions, terminal rankings, and penalty ordering.
 
+Weight optimization:
+
+The optimizer requires `tqdm` and shows completed ES candidates (including
+parallel workers), plus round-level progress for benchmarks, hill-climb
+evaluations, and final validation. Use `--no-progress` to disable bars.
+
+```sh
+python optimize_weights.py --method es --iterations 30 --pairs 16 --trials 20 --benchmark-trials 40 --validation-trials 100 --workers 4
+```
+
+Tunes the 16 heuristic scoring weights inherited by `ExperiencedAgent3`. When
+run with `--agent ExperiencedAgent4`, it also tunes the four turn-order danger
+weights: response, finish, completion, and 2-bomb penalties. Use
+`--agent ExperiencedAgent4` to optimize the new policy. The optimizer uses
+mirrored evolution strategies (ES). Use `--agent ExperiencedAgent2` to tune that
+policy instead. The default opponent is `ExperiencedAgent2`; use
+`--opponents ExperiencedAgent2 ExperiencedAgent3` to optimize mean placement
+equally across both opponents. Lower mean placement is better. Each evaluation
+runs all six 2v2 seat configurations. ES normalizes weights to their allowed
+ranges, samples Gaussian directions, and evaluates positive and negative
+perturbations on identical deals within each generation. It combines their
+placement differences into a gradient estimate and updates the center. Training
+deals change each generation. Candidates and updated centers are clipped to the
+allowed ranges; `--sigma` (default 0.1) controls noise and `--learning-rate`
+(default 0.05) controls the update size in normalized coordinates.
+
+A fixed, separate benchmark selects the best center, including the initial
+weights. Final validation compares that selection with the original defaults on
+a separate set of deals, without using validation scores to select weights.
+This optimizes the arena's later-round 2v2 setting, not every possible matchup.
+
+The script preserves default behavior and saves its search history, seeds,
+weights, and validation results to `results/optimized_agent.json`. It checkpoints
+after each generation. `--initial results/optimized_agent.json` starts a new
+search from that checkpoint's best weights. To continue an interrupted ES search
+without restarting its random stream, use `--resume`; it restores the current
+center, best benchmark checkpoint, completed generations, and random state. The
+checkpoint's original search settings are restored automatically; only set the
+new number of generations, output path, worker count, or progress preference:
+
+```sh
+python optimize_weights.py --resume results/optimized_agent.json --iterations 30 --output results/optimized_agent.json --workers 4
+```
+
+After validation it also writes a loadable policy:
+
+```sh
+python arena.py results.optimized_agent:OptimizedAgent src.agent:ExperiencedAgent2 --trials-per-configuration 100
+```
+
+Use `--output results/another_name.json` to keep separate runs. The search can
+be expensive, especially with the exact endgame solver in `ExperiencedAgent3`.
+The example runs 3,840 training rounds plus 240 benchmark rounds per generation
+per opponent. Workers evaluate perturbations in separate processes. Use
+`--method hill` for the original stochastic hill-climbing search (ES-specific
+options are unused in that mode).
+For a quick smoke run, use `--agent ExperiencedAgent2 --iterations 1 --pairs 2 --trials 1
+--benchmark-trials 1 --validation-trials 1`. Small samples can overfit; increase trials for useful
+measurements and check validation improvement before adopting the weights.
+The search is heuristic and does not guarantee a global optimum.
+
 Role-effect simulation:
 
 ```sh
