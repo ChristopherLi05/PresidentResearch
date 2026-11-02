@@ -1,6 +1,6 @@
 from collections import Counter
 from functools import lru_cache
-from math import comb
+from math import comb, isfinite
 from typing import Any, Mapping, Optional
 import random
 
@@ -441,12 +441,14 @@ class ExperiencedAgent2(ExperiencedAgent):
         if not ordinary:
             return 0.0 if not twos else 60.0 + twos
         # Groups represent future turns, but control and singles change their cost.
+        # Reuse these probabilities for the reserve bonus, preserving group
+        # and arithmetic order so scores and tie-breaking stay identical.
+        controls = [self._control(r, n, unseen, opponents)
+                    for r, n in ordinary.items()]
         cost = sum(self.GROUP_WEIGHT + self.CARD_WEIGHT * n + (self.SINGLE_WEIGHT if n == 1 else 0.0)
-                   - self.HAND_CONTROL_WEIGHT * self._control(r, n, unseen, opponents)
-                   for r, n in ordinary.items())
+                   - self.HAND_CONTROL_WEIGHT * control
+                   for n, control in zip(ordinary.values(), controls))
         if self.CONTROL_RESERVE_WEIGHT:
-            controls = [self._control(r, n, unseen, opponents)
-                        for r, n in ordinary.items()]
             # Value control more when it supports other vulnerable groups.
             # Squaring emphasizes reliable control; saturation gives extra
             # control groups diminishing value, without rank/phase cutoffs.
@@ -585,7 +587,116 @@ class ExperiencedAgent2(ExperiencedAgent):
         gift = self.TRADE_BOMB_COST if returned == "2" else self.TRADE_RANK_WEIGHT * RANK_VALUE[returned]
         return self._hand_cost(counts, unseen, opponents) + gift
 
-    def _trade_return(self, message: Mapping[str, Any], actions: list[dict[str, Any]]) -> dict[str, Any]:
+    def _trade_fast_path_supported(self) -> bool:
+        """Whether trade scoring can bypass dynamically dispatched helpers.
+
+        The lookup scorer below is deliberately only an implementation of this
+        class's existing scoring expression.  It must not bypass a subclass or
+        instance patch which changes any helper used by the direct evaluator.
+        Weight-only subclasses remain eligible.
+        """
+        helpers = ("_holding", "_control", "_control_cached", "_hand_cost",
+                   "_hand_cost_cached", "_trade_value")
+        if any(name in self.__dict__ for name in helpers):
+            return False
+        for name in helpers:
+            actual = getattr(type(self), name)
+            expected = getattr(ExperiencedAgent2, name)
+            if getattr(actual, "__func__", actual) is not getattr(expected, "__func__", expected):
+                return False
+        weights = ("CONTROL_RESERVE_WEIGHT", "GROUP_WEIGHT", "CARD_WEIGHT", "SINGLE_WEIGHT",
+                   "HAND_CONTROL_WEIGHT", "BOMB_GROUP_PENALTY", "BOMB_COVER_PENALTY",
+                   "BOMB_VALUE", "TRADE_BOMB_COST", "TRADE_RANK_WEIGHT")
+        return all(isinstance(getattr(self, name), (int, float))
+                   and not isinstance(getattr(self, name), bool)
+                   and isfinite(getattr(self, name)) for name in weights)
+
+    @staticmethod
+    def _trade_counts_supported(counts: Counter[str]) -> bool:
+        """Check the compact lookup domain without changing public behavior."""
+        return (all(rank in RANK_VALUE and isinstance(n, int) and not isinstance(n, bool)
+                    and 0 <= n <= 4 for rank, n in counts.items())
+                and all(0 <= counts[rank] <= 4 for rank in RANK_VALUE))
+
+    def _trade_lookup_cost(self, pool: int, opponents: list[tuple[str, int]]):
+        """Build an order-preserving hand-cost evaluator for one trade decision.
+
+        Only calls to ``_holding`` are replaced with decision-local lookups.
+        The response expression, group iteration, reserve calculation, and
+        final arithmetic intentionally match ``_hand_cost_cached`` exactly.
+        """
+        ranks = tuple(RANK_VALUE)
+        rank_index = {rank: index for index, rank in enumerate(ranks)}
+        two_index = rank_index["2"]
+        sizes = tuple(size for _, size in opponents)
+        unique_sizes = tuple(dict.fromkeys(sizes))
+        size_index = {size: index for index, size in enumerate(unique_sizes)}
+        opponent_size_indexes = tuple(size_index[size] for size in sizes)
+        # Indexed tables avoid tuple construction and hashing in the candidate
+        # loop. Entry zero is unused because required widths start at one.
+        holding = [[[0.0] + [self._holding(pool, copies, size, needed)
+                              for needed in (1, 2, 3)]
+                    for copies in range(min(4, pool) + 1)]
+                   for size in unique_sizes]
+        group_cost = [0.0] + [self.GROUP_WEIGHT + self.CARD_WEIGHT * count
+                               + (self.SINGLE_WEIGHT if count == 1 else 0.0)
+                               for count in range(1, 5)]
+        reserve_weight = 0.0
+        if self.CONTROL_RESERVE_WEIGHT:
+            sizes_for_patience = [min(13, max(0, size)) for size in sizes]
+            if sizes_for_patience:
+                fullness = sum(sizes_for_patience) / (13 * len(sizes_for_patience))
+                closest = min(sizes_for_patience)
+                patience = fullness * (16 * closest / (13 * (closest + 3)))
+                reserve_weight = self.CONTROL_RESERVE_WEIGHT * patience
+
+        def control(rank_index_: int, width: int, unseen: list[int]) -> float:
+            if width == 4:
+                return 1.0
+            factors = []
+            for size_table in holding:
+                response = size_table[unseen[two_index]][1]
+                response += sum(size_table[unseen[other_index]][width]
+                                for other_index in range(rank_index_, two_index))
+                response += size_table[unseen[rank_index_]][4 - width]
+                factors.append(1.0 - min(1.0, response))
+            value = 1.0
+            for size_index_ in opponent_size_indexes:
+                value *= factors[size_index_]
+            return value
+
+        def hand_cost(counts: list[int] | Counter[str], unseen: list[int] | Counter[str],
+                      order: tuple[int, ...] | None = None) -> float:
+            # The Counter form is retained for direct differential tests. The
+            # trade paths pass mutable arrays and an existing rank order, so
+            # no Counter or cache-key tuple is built per candidate.
+            if isinstance(counts, Counter):
+                order = tuple(rank_index[rank] for rank in counts)
+                counts = [counts[rank] for rank in ranks]
+                unseen = [unseen[rank] for rank in ranks]
+            assert order is not None
+            ordinary = [(index, counts[index]) for index in order
+                        if index != two_index and counts[index] > 0]
+            twos = counts[two_index]
+            if not ordinary:
+                return 0.0 if not twos else 60.0 + twos
+            controls = [control(index, count, unseen) for index, count in ordinary]
+            cost = sum(group_cost[n]
+                       - self.HAND_CONTROL_WEIGHT * value
+                       for (_, n), value in zip(ordinary, controls))
+            if reserve_weight:
+                reserve = sum(value * value for value in controls)
+                support = sum(value * value * sum(1 - other for j, other in enumerate(controls) if i != j)
+                              for i, value in enumerate(controls))
+                cost -= reserve_weight * support / ((1 + reserve) * len(controls))
+            cover = sum(count for _, count in ordinary)
+            cost += self.BOMB_GROUP_PENALTY * max(0, twos - (len(ordinary) - 1))
+            cost += self.BOMB_COVER_PENALTY * max(0, twos - (cover - 1))
+            return cost - self.BOMB_VALUE * twos
+
+        return hand_cost
+
+    def _trade_return_direct(self, message: Mapping[str, Any], actions: list[dict[str, Any]]) -> dict[str, Any]:
         unseen, opponents = self._unseen(message), self._opponents(message)
         by_rank = {}
         for action in actions:
@@ -599,7 +710,7 @@ class ExperiencedAgent2(ExperiencedAgent):
             return self._trade_value(counts, rank, outside, opponents)
         return min(by_rank.values(), key=score)
 
-    def _trade_rank(self, message: Mapping[str, Any], actions: list[dict[str, Any]]) -> dict[str, Any]:
+    def _trade_rank_direct(self, message: Mapping[str, Any], actions: list[dict[str, Any]]) -> dict[str, Any]:
         hand = self._counts(message["hand"])
         unseen, opponents = self._unseen(message), self._opponents(message)
         failed = self._failed_requests(message)
@@ -619,6 +730,95 @@ class ExperiencedAgent2(ExperiencedAgent):
                 outside[returned] += 1
                 values.append(self._trade_value(final, returned, outside, opponents))
             return min(values), -RANK_VALUE[rank]
+        return min(candidates, key=score)
+
+    def _trade_return(self, message: Mapping[str, Any], actions: list[dict[str, Any]]) -> dict[str, Any]:
+        """Choose a return card using lookups when the direct expression is safe."""
+        if not self._trade_fast_path_supported():
+            return self._trade_return_direct(message, actions)
+        hand, unseen = self._counts(message["hand"]), self._unseen(message)
+        opponents = self._opponents(message)
+        by_rank = {}
+        for action in actions:
+            by_rank.setdefault(action["card"]["rank"], action)
+        if (not self._trade_counts_supported(hand) or not self._trade_counts_supported(unseen)
+                or any(not isinstance(size, int) or isinstance(size, bool) or size < 0
+                       for _, size in opponents)):
+            return self._trade_return_direct(message, actions)
+        ranks = tuple(RANK_VALUE)
+        rank_index = {rank: index for index, rank in enumerate(ranks)}
+        for action in by_rank.values():
+            rank = action["card"]["rank"]
+            if rank not in RANK_VALUE or hand[rank] <= 0:
+                return self._trade_return_direct(message, actions)
+        if any(hand[rank] + unseen[rank] > 4 for rank in ranks):
+            return self._trade_return_direct(message, actions)
+        cost = self._trade_lookup_cost(sum(unseen.values()) + 1, opponents)
+        hand_counts = [hand[rank] for rank in ranks]
+        unseen_counts = [unseen[rank] for rank in ranks]
+        hand_order = tuple(rank_index[rank] for rank in hand)
+
+        def score(action: dict[str, Any]) -> float:
+            rank = action["card"]["rank"]
+            index = rank_index[rank]
+            hand_counts[index] -= 1
+            unseen_counts[index] += 1
+            value = cost(hand_counts, unseen_counts, hand_order)
+            hand_counts[index] += 1
+            unseen_counts[index] -= 1
+            return value + (self.TRADE_BOMB_COST if rank == "2"
+                            else self.TRADE_RANK_WEIGHT * RANK_VALUE[rank])
+
+        return min(by_rank.values(), key=score)
+
+    def _trade_rank(self, message: Mapping[str, Any], actions: list[dict[str, Any]]) -> dict[str, Any]:
+        """Choose a request rank with a decision-local probability lookup table."""
+        if not self._trade_fast_path_supported():
+            return self._trade_rank_direct(message, actions)
+        failed = self._failed_requests(message)
+        hand, unseen = self._counts(message["hand"]), self._unseen(message)
+        opponents = self._opponents(message)
+        candidates = [action for action in actions if action["rank"] not in failed
+                      and action["rank"] in RANK_VALUE and hand[action["rank"]] < 4]
+        if (not self._trade_counts_supported(hand) or not self._trade_counts_supported(unseen)
+                or any(hand[rank] + unseen[rank] > 4 for rank in RANK_VALUE)
+                or any(not isinstance(size, int) or isinstance(size, bool) or size < 0
+                       for _, size in opponents)
+                or any(unseen[action["rank"]] <= 0 for action in candidates)):
+            return self._trade_rank_direct(message, actions)
+        # Preserve the direct ValueError for an empty candidate set.
+        if not candidates:
+            return self._trade_rank_direct(message, actions)
+        ranks = tuple(RANK_VALUE)
+        rank_index = {rank: index for index, rank in enumerate(ranks)}
+        cost = self._trade_lookup_cost(sum(unseen.values()), opponents)
+        hand_counts = [hand[rank] for rank in ranks]
+        unseen_counts = [unseen[rank] for rank in ranks]
+        hand_order = tuple(rank_index[rank] for rank in hand)
+
+        def score(action: dict[str, Any]) -> tuple[float, int]:
+            requested = action["rank"]
+            request_index = rank_index[requested]
+            request_order = hand_order if hand_counts[request_index] else hand_order + (request_index,)
+            hand_counts[request_index] += 1
+            unseen_counts[request_index] -= 1
+            best = None
+            for returned_index in request_order:
+                if hand_counts[returned_index] <= 0:
+                    continue
+                hand_counts[returned_index] -= 1
+                unseen_counts[returned_index] += 1
+                returned = ranks[returned_index]
+                value = cost(hand_counts, unseen_counts, request_order)
+                value += (self.TRADE_BOMB_COST if returned == "2"
+                          else self.TRADE_RANK_WEIGHT * RANK_VALUE[returned])
+                hand_counts[returned_index] += 1
+                unseen_counts[returned_index] -= 1
+                best = value if best is None or value < best else best
+            hand_counts[request_index] -= 1
+            unseen_counts[request_index] += 1
+            return best, -RANK_VALUE[requested]
+
         return min(candidates, key=score)
 
 
@@ -785,8 +985,8 @@ class ExperiencedAgent3Tuned(ExperiencedAgent3):
     TRADE_RANK_WEIGHT = 0.03073388581995172
 
 
-class ExperiencedAgent4(ExperiencedAgent3):
-    """Experimental successor to :class:`ExperiencedAgent3`.
+class ExperiencedAgent4(ExperiencedAgent3Tuned):
+    """Experimental successor to :class:`ExperiencedAgent3Tuned`.
 
     It deliberately starts with identical behavior, including the exact
     two-player endgame solver, except for its turn-order-aware danger cost.

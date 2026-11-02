@@ -30,3 +30,22 @@ Hand cache keys also preserve rank iteration order to keep floating-point ties
 unchanged. Trade returns evaluate only the first legal card of each rank, and
 plays or completions that empty the hand return immediately without scoring
 other actions. Bombs retain their special final-card penalty.
+
+Trade scoring also has a decision-local lookup path for normal, physically
+consistent snapshots. It precomputes the existing hypergeometric holding
+probabilities by opponent size, unseen-copy count, and required width, then
+rebuilds the original response and hand-cost expressions in their original
+order. Candidate hands and unseen pools are mutable rank-count arrays, updated
+and restored in place for each request/return pair; the original Counter order
+is retained separately for floating-point behavior and ties. Holding values use
+indexed tables, fixed group costs and reserve patience are computed once per
+decision, and equal-size opponents reuse a response factor before multiplying
+the factors in their original seat order. It does not use response deltas,
+aggregate group totals, or reordered reserve arithmetic.
+
+The direct evaluator remains the fallback for partial or inconsistent
+snapshots, non-integer/out-of-range counts, failed requests with no remaining
+candidate, and any subclass or instance replacement of trade-scoring helpers
+(`_holding`, `_control`, `_hand_cost`, or `_trade_value`, including their cache
+helpers). This keeps weight-only policy subclasses eligible while preserving
+the behavior of custom scoring policies and test monkeypatches.

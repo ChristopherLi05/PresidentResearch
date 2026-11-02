@@ -140,6 +140,85 @@ class ExperiencedAgent2Tests(unittest.TestCase):
         actions = [{"type": "trade_request", "rank": r} for r in ("A", "2", "K")]
         self.assertEqual(self.agent._trade_rank(message, actions)["rank"], "K")
 
+    def test_trade_lookup_matches_direct_evaluator_for_all_affected_agents(self):
+        hand = [card(rank, suit).json() for rank, suit in
+                [("3", "C"), ("3", "D"), ("5", "C"), ("7", "C"), ("7", "D"),
+                 ("9", "C"), ("10", "C"), ("J", "C"), ("Q", "C"), ("K", "C"),
+                 ("A", "C"), ("2", "C"), ("2", "D")]]
+        message = {"player": "a", "hand": hand, "events": [],
+                   "players": ["a", "b", "c", "d"], "active_players": ["a", "b", "c", "d"]}
+        requests = [{"type": "trade_request", "rank": rank} for rank in RANK_VALUE]
+        returns = [{"type": "trade_return", "card": value} for value in hand]
+        for agent_type in (ExperiencedAgent2, ExperiencedAgent3, ExperiencedAgent3Tuned, ExperiencedAgent4):
+            agent = agent_type()
+            self.assertEqual(agent._trade_rank(message, requests), agent._trade_rank_direct(message, requests))
+            self.assertEqual(agent._trade_return(message, returns), agent._trade_return_direct(message, returns))
+
+    def test_trade_array_scorer_matches_direct_for_shuffled_hands_and_failed_requests(self):
+        deck = list(standard_deck())
+        for seed in range(12):
+            rng = random.Random(seed)
+            rng.shuffle(deck)
+            hand = [value.json() for value in deck[:13]]
+            message = {"player": "a", "hand": hand,
+                       "events": [{"type": "trade_requested", "initiator": "a",
+                                   "rank": "K", "success": False}],
+                       "players": ["a", "b", "c", "d"],
+                       "active_players": ["a", "b", "c", "d"]}
+            requests = [{"type": "trade_request", "rank": rank} for rank in RANK_VALUE]
+            returns = [{"type": "trade_return", "card": value} for value in hand]
+            self.assertEqual(self.agent._trade_rank(message, requests),
+                             self.agent._trade_rank_direct(message, requests))
+            self.assertEqual(self.agent._trade_return(message, returns),
+                             self.agent._trade_return_direct(message, returns))
+
+    def test_trade_lookup_preserves_each_request_pair_score_exactly(self):
+        hand = [card("3").json(), card("3", "D").json(), card("8").json(),
+                card("A").json(), card("2").json()]
+        message = {"player": "a", "hand": hand, "events": [],
+                   "players": ["a", "b", "c", "d"], "active_players": ["a", "b", "c", "d"]}
+        counts, unseen = self.agent._counts(hand), self.agent._unseen(message)
+        ranks = tuple(RANK_VALUE)
+        indexes = {rank: index for index, rank in enumerate(ranks)}
+        opponent_sets = (self.agent._opponents(message),
+                         [("b", 5), ("c", 5), ("d", 9)])
+        for opponents in opponent_sets:
+            lookup = self.agent._trade_lookup_cost(sum(unseen.values()), opponents)
+            for requested in ("4", "K", "2"):
+                received = counts.copy()
+                received[requested] += 1
+                for returned, n in received.items():
+                    if not n:
+                        continue
+                    final, outside = received.copy(), unseen.copy()
+                    final[returned] -= 1
+                    outside[requested] -= 1
+                    outside[returned] += 1
+                    gift = (self.agent.TRADE_BOMB_COST if returned == "2"
+                            else self.agent.TRADE_RANK_WEIGHT * RANK_VALUE[returned])
+                    self.assertEqual(lookup([final[rank] for rank in ranks],
+                                            [outside[rank] for rank in ranks],
+                                            tuple(indexes[rank] for rank in final)) + gift,
+                                     self.agent._trade_value(final, returned, outside, opponents))
+
+    def test_trade_lookup_falls_back_for_scoring_overrides_and_invalid_conservation(self):
+        class CustomTradeValue(ExperiencedAgent2):
+            def _trade_value(self, counts, returned, unseen, opponents):
+                return -RANK_VALUE[returned]
+
+        hand = [card("3").json(), card("4").json()]
+        actions = [{"type": "trade_return", "card": value} for value in hand]
+        message = {"hand": hand, "players": [], "events": []}
+        custom = CustomTradeValue()
+        self.assertEqual(custom._trade_return(message, actions), custom._trade_return_direct(message, actions))
+        # The direct path still supports partial snapshots where a rank appears
+        # more often in hand plus unseen than a physical deck allows.
+        invalid = {"player": "a", "hand": [card("3").json()], "players": [], "events": []}
+        with patch.object(self.agent, "_unseen", return_value=Counter({"3": 4, "4": 3, "2": 2})):
+            requests = [{"type": "trade_request", "rank": "4"}]
+            self.assertEqual(self.agent._trade_rank(invalid, requests),
+                             self.agent._trade_rank_direct(invalid, requests))
+
     def test_mixed_agents_finish_successive_rounds(self):
         for seed in range(3):
             game = Game(PLAYERS, rng=random.Random(seed))
