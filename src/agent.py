@@ -365,6 +365,11 @@ class ExperiencedAgent2(ExperiencedAgent):
     TRADE_BOMB_COST = 1.2
     TRADE_RANK_WEIGHT = 0.035
 
+    def __init__(self, *, evaluation_backend: str = "auto"):
+        if evaluation_backend not in {"auto", "python", "c"}:
+            raise ValueError("evaluation_backend must be auto, python, or c")
+        self.evaluation_backend = evaluation_backend
+
     @classmethod
     def _unseen(cls, message: Mapping[str, Any]) -> Counter[str]:
         unseen = Counter({rank: 4 for rank in RANK_VALUE})
@@ -432,6 +437,10 @@ class ExperiencedAgent2(ExperiencedAgent):
     @lru_cache(maxsize=8192)
     def _hand_cost_cached(self, hand_items: tuple[tuple[str, int], ...],
                           unseen_counts: tuple[int, ...], opponent_sizes: tuple[int, ...]) -> float:
+        from src.agent_search_c import hand_value
+        native = hand_value(self, hand_items, unseen_counts, opponent_sizes, lead=False)
+        if native is not None:
+            return native
         # Preserve hand iteration order so floating-point sums and ties stay exact.
         counts = Counter(dict(hand_items))
         unseen = Counter(dict(zip(RANK_VALUE, unseen_counts)))
@@ -482,6 +491,10 @@ class ExperiencedAgent2(ExperiencedAgent):
     @lru_cache(maxsize=8192)
     def _lead_cost_cached(self, hand_items: tuple[tuple[str, int], ...],
                           unseen_counts: tuple[int, ...], opponent_sizes: tuple[int, ...]) -> float:
+        from src.agent_search_c import hand_value
+        native = hand_value(self, hand_items, unseen_counts, opponent_sizes, lead=True)
+        if native is not None:
+            return native
         counts = Counter(dict(hand_items))
         unseen = Counter(dict(zip(RANK_VALUE, unseen_counts)))
         opponents = [(str(i), size) for i, size in enumerate(opponent_sizes)]
@@ -518,6 +531,10 @@ class ExperiencedAgent2(ExperiencedAgent):
         for action in actions:
             if action["type"] in {"play", "complete"} and len(action["cards"]) == len(message["hand"]):
                 return action
+        return min(actions, key=self._play_scorer(message))
+
+    def _play_scorer(self, message: Mapping[str, Any]):
+        """Decision-local scorer shared by the policy and shallow search."""
         unseen = self._unseen(message)
         opponents = self._opponents(message)
         hand = self._counts(message["hand"])
@@ -572,7 +589,7 @@ class ExperiencedAgent2(ExperiencedAgent):
             cache[key] = value
             return value
 
-        return min(actions, key=score)
+        return score
 
     def _play(self, message: Mapping[str, Any], actions: list[dict[str, Any]]) -> dict[str, Any]:
         return self._choose_play(message, actions)
@@ -930,7 +947,8 @@ class ExperiencedAgent3(ExperiencedAgent2):
             if source is None or round_.turn not in active:
                 return None
             previous, skip = source
-            order = ([previous] if previous in round_.active else []) + round_._active_after(previous)
+            order = ([previous] if previous in round_.active else []) + [
+                p for p in round_._active_after(previous) if p != previous]
             if round_.turn not in order:
                 return None
             round_.completion_order = order
@@ -988,10 +1006,8 @@ class ExperiencedAgent3Tuned(ExperiencedAgent3):
 class ExperiencedAgent4(ExperiencedAgent3Tuned):
     """Experimental successor to :class:`ExperiencedAgent3Tuned`.
 
-    It deliberately starts with identical behavior, including the exact
-    two-player endgame solver, except for its turn-order-aware danger cost.
-    New normal-play features and search methods should be developed here so
-    comparisons with ExperiencedAgent3 remain a meaningful baseline.
+    Adds turn-order danger and bounded, policy-guided Monte Carlo evaluation.
+    The inherited exact two-player solver runs outside the search budget.
     """
 
     # The existing policy rewards global control.  These weights separately
@@ -999,6 +1015,26 @@ class ExperiencedAgent4(ExperiencedAgent3Tuned):
     NEXT_RESPONSE_PENALTY = 1.0
     NEXT_FINISH_PENALTY = 6.0
     NEXT_COMPLETION_PENALTY = 1.5
+
+    def __init__(self, rng: Optional[random.Random] = None, *,
+                 search_time_ms: float | None = 50.0, search_worlds: int = 8,
+                 search_backend: str = "auto", evaluation_backend: str = "auto"):
+        super().__init__(evaluation_backend=evaluation_backend)
+        if search_backend not in {"auto", "python", "c"}:
+            raise ValueError("search_backend must be auto, python, or c")
+        if search_time_ms is not None and (not isfinite(search_time_ms) or search_time_ms < 0):
+            raise ValueError("search_time_ms must be nonnegative or None")
+        if isinstance(search_worlds, bool) or not isinstance(search_worlds, int) or search_worlds < 0:
+            raise ValueError("search_worlds must be a nonnegative integer")
+        self.rng = rng if rng is not None else random.Random(0)
+        self.search_time_ms = search_time_ms
+        self.search_worlds = search_worlds
+        self.search_backend = search_backend
+        self.last_search = {}
+
+    def _choose_play(self, message, actions):
+        from src.agent_search import choose
+        return choose(self, message, actions)
     NEXT_BOMB_PENALTY = 1.5
 
     def _turn_order_danger(self, action: Mapping[str, Any], top: Mapping[str, Any],

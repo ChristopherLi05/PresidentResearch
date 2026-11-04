@@ -140,19 +140,25 @@ def _from_round(round_: Round, players: list[str]) -> _State:
     return state
 
 
-def solve_round(round_: Round) -> SolveResult:
+def solve_round(round_: Round, *, backend: str = "auto") -> SolveResult:
     """Return a legal optimal action without modifying ``round_``.
 
     Accepts play or completion decisions with exactly two active players.
     Each call owns its memo table, so unrelated games do not retain memory.
     Search is exhaustive in the worst case; there is no heuristic/time cutoff.
+    ``backend='auto'`` uses the optional native solver when available; select
+    ``'python'`` for the reference or ``'c'`` to require the native library.
     """
+    if backend not in {"auto", "python", "c"}:
+        raise ValueError("backend must be auto, python, or c")
     players = round_._active_in_order()
     if round_.done or len(players) != 2 or round_.phase not in {"play", "completion"}:
         raise ValueError("solver requires a play/completion decision with two active players")
     if any(not any(c.rank != "2" for c in round_.hands[p]) for p in players):
         raise ValueError("active hands must contain a non-bomb card")
     root = _from_round(round_, players)
+    from src.solver_c import solve
+    native = solve(root, backend)
 
     @lru_cache(maxsize=None)
     def winner(s: _State) -> int:
@@ -163,13 +169,19 @@ def solve_round(round_: Round) -> SolveResult:
                 return s.actor
         return 1 - s.actor
 
-    moves = _moves(root)
-    best = moves[0]
-    outcome = 1 - root.actor
-    for move in moves:
-        if winner(_step(root, move)) == root.actor:
-            best, outcome = move, root.actor
-            break
+    if native is not None:
+        kind, rank, count, outcome, misses, hits = native
+        best = _Move(kind, rank, count)
+    else:
+        moves = _moves(root)
+        best = moves[0]
+        outcome = 1 - root.actor
+        for move in moves:
+            if winner(_step(root, move)) == root.actor:
+                best, outcome = move, root.actor
+                break
+        info = winner.cache_info()
+        misses, hits = info.misses, info.hits
     player = players[root.actor]
     # Resolve suit-equivalent moves back to an engine-provided legal action.
     for action in round_.legal_actions(player):
@@ -177,7 +189,6 @@ def solve_round(round_: Round) -> SolveResult:
             continue
         cards = action.get("cards", [action["card"]] if "card" in action else [])
         if best.rank < 0 or (len(cards) == best.count and cards[0]["rank"] == RANKS[best.rank]):
-            info = winner.cache_info()
             return SolveResult(player, action, "win" if outcome == root.actor else "loss",
-                               info.misses, info.hits)
+                               misses, hits)
     raise RuntimeError("solver action does not match engine legal actions")

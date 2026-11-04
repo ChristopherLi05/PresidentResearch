@@ -57,6 +57,9 @@ Engine protocol and tests:
 
 - Agent policy documentation: [docs/agents](docs/agents/). It describes every built
   policy, including the random, basic, experienced, and SwitchP agents.
+- Build the optional exact C endgame solver with `python -m src.solver_c --build`.
+  Agent3, Agent3Tuned, and Agent4 use it automatically in new processes.
+  Compare solver and complete-game timings with `python benchmark_solver.py`.
 - `src.tk_client.HumanClient` is a Tkinter `Client` implementation for a local human player. It renders each
   private protocol request and blocks until the user selects one of the engine-provided legal actions. Run
   `python -m src.tk_client` to play successive rounds as `you` against three `BasicClient` opponents. After each

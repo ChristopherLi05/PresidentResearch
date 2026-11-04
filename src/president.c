@@ -5,6 +5,16 @@
 #include <stdlib.h>
 #include <string.h>
 
+/* The search build adds an optional native evaluator in this translation unit
+ * so it can reuse the engine's private state without exposing it as an ABI. */
+#ifdef PRESIDENT_SEARCH
+#include <math.h>
+#include <time.h>
+#ifdef _WIN32
+#include <windows.h>
+#endif
+#endif
+
 static const char *const ranks[] = {
     "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K", "A", "2"
 };
@@ -710,3 +720,7 @@ PresidentStatus president_game_run(PresidentGame *g, const PresidentClient clien
     free(request);
     return president_round_done(g->round) ? PRESIDENT_OK : PRESIDENT_ACTION_LIMIT;
 }
+
+#ifdef PRESIDENT_SEARCH
+#include "agent_search_native.inc"
+#endif
