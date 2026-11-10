@@ -1378,3 +1378,196 @@ class SwitchPAgent(ExperiencedAgent):
             if self._safety(rest)[2] and self._accept_follow(before, after, 200, len(action["cards"]))[0]:
                 return action
         return next(a for a in actions if a["type"] == "decline_completion")
+
+
+class HumanRulesAgent3(ExperiencedAgent):
+    """Fixed table-side rules extracted from ExperiencedAgent3Tuned.
+
+    See ``docs/interpretation/experiencedagent3-human.md``. Every decision is a
+    short ordered rule list over the hand's group count G, 2 count B, the
+    board width, and the smallest opponent hand. With exactly two players
+    left it uses the ExperiencedAgent3 exact solver, as the tuned agent does,
+    and falls back to the rules when that position cannot be rebuilt.
+    """
+
+    def __init__(self, *, heads_up_solver: bool = True) -> None:
+        self.heads_up_solver = heads_up_solver
+
+    # -- shared helpers ------------------------------------------------------
+
+    @staticmethod
+    def _ordinary(counts: Counter[str]) -> list[str]:
+        """Held ordinary ranks, lowest first."""
+        return sorted((r for r, n in counts.items() if r != "2" and n), key=RANK_VALUE.__getitem__)
+
+    @classmethod
+    def _gb(cls, hand: list[Mapping[str, Any]]) -> tuple[int, int]:
+        """Return (G, B): ordinary groups held and 2s held."""
+        counts = cls._counts(hand)
+        return len(cls._ordinary(counts)), counts["2"]
+
+    @classmethod
+    def _smallest_opponent(cls, message: Mapping[str, Any]) -> int:
+        counts = cls._opponent_counts(message)
+        active = message.get("active_players") or list(counts)
+        sizes = [counts[p] for p in active
+                 if p != message["player"] and counts.get(p, 0) > 0]
+        return min(sizes, default=13)
+
+    @classmethod
+    def _rank(cls, action: Mapping[str, Any]) -> str:
+        return cls._action_cards(action)[0]["rank"]
+
+    @classmethod
+    def _width(cls, action: Mapping[str, Any]) -> int:
+        return len(cls._action_cards(action))
+
+    @classmethod
+    def _lowest(cls, options: list[dict[str, Any]]) -> dict[str, Any]:
+        return min(options, key=lambda a: (RANK_VALUE[cls._rank(a)], -cls._width(a)))
+
+    # -- trading -------------------------------------------------------------
+
+    def _trade_rank(self, message: Mapping[str, Any], actions: list[dict[str, Any]]) -> dict[str, Any]:
+        counts = self._counts(message["hand"])
+        failed = self._failed_requests(message)
+        offered = {a["rank"]: a for a in actions
+                   if a["rank"] not in failed and counts[a["rank"]] < 4}
+        if not offered:
+            offered = ({a["rank"]: a for a in actions if a["rank"] not in failed}
+                       or {a["rank"]: a for a in actions})
+
+        def desc(ranks):
+            return sorted(ranks, key=RANK_VALUE.__getitem__, reverse=True)
+        ordinary = [r for r in counts if r != "2" and counts[r]]
+        triples = desc(r for r in ordinary if counts[r] == 3)
+        singles = desc(r for r in ordinary if counts[r] == 1)
+        pairs = desc(r for r in ordinary if counts[r] == 2)
+
+        priorities: list[str] = []
+        # T1: the fourth card of the highest triple. T2b: once a fourth-card
+        # request has failed this exchange, move on to a 2.
+        if not failed & set(triples):
+            priorities += triples
+        # T2: a 2, or the lone Ace when already holding two or more 2s.
+        if counts["2"] >= 2 and counts["A"] == 1:
+            priorities.append("A")
+        priorities.append("2")
+        # T2b: after a failed 2, pair the highest single; then other matches,
+        # then unheld ranks from the top.
+        priorities += singles + triples + pairs
+        priorities += desc(r for r in RANK_VALUE if r != "2" and not counts[r])
+        for rank in priorities:
+            if rank in offered:
+                return offered[rank]
+        return max(offered.values(), key=lambda a: RANK_VALUE[a["rank"]])
+
+    def _trade_return(self, message: Mapping[str, Any], actions: list[dict[str, Any]]) -> dict[str, Any]:
+        counts = self._counts(message["hand"])
+
+        def key(action: dict[str, Any]) -> tuple[int, int]:
+            rank = action["card"]["rank"]
+            # T3: lowest single, then one card off the lowest triple, then
+            # pairs and quads; a 2 only when nothing else is left.
+            tier = 4 if rank == "2" else {1: 0, 3: 1, 2: 2}.get(counts[rank], 3)
+            return tier, RANK_VALUE[rank]
+        return min(actions, key=key)
+
+    # -- completions ---------------------------------------------------------
+
+    def _completion(self, message: Mapping[str, Any], actions: list[dict[str, Any]]) -> dict[str, Any]:
+        hand = message["hand"]
+        for action in (a for a in actions if a["type"] == "complete"):
+            remaining = self._without(hand, action["cards"])
+            if not remaining:
+                return action
+            groups, twos = self._gb(remaining)
+            # C1: decline when afterwards B >= G with B > 0.
+            if not (twos > 0 and twos >= groups):
+                return action
+        return next(a for a in actions if a["type"] == "decline_completion")
+
+    # -- play ----------------------------------------------------------------
+
+    def _play(self, message: Mapping[str, Any], actions: list[dict[str, Any]]) -> dict[str, Any]:
+        hand = message["hand"]
+        counts = self._counts(hand)
+        passes = [a for a in actions if a["type"] == "pass"]
+
+        def after(action):
+            return self._without(hand, self._action_cards(action))
+
+        # Rule 0.1: finish with a normal play.
+        for action in actions:
+            if action["type"] == "play" and not after(action):
+                return action
+        # Rule 0.2: never bomb out. Rule 0.3: never leave only 2s if avoidable.
+        plays = [a for a in actions if a["type"] in {"play", "bomb"} and after(a)]
+        plays = [a for a in plays if any(c["rank"] != "2" for c in after(a))] or plays
+        if not plays:
+            return passes[0] if passes else actions[0]
+
+        ordinary = [a for a in plays if a["type"] == "play"]
+        bombs = [a for a in plays if a["type"] == "bomb"]
+        whole = [a for a in ordinary if self._width(a) == counts[self._rank(a)]]
+        groups, twos = self._gb(hand)
+        smallest = self._smallest_opponent(message)
+        top = message.get("top")
+
+        if top is None:
+            return self._lead(ordinary or plays, whole, counts, groups, twos, smallest)
+
+        width = top["count"]
+        # F2: bomb rule.
+        if bombs and (not whole or groups - twos <= 1 or (smallest == 1 and width == 1)):
+            return bombs[0]
+        # F1: lowest clean follow; do not pass.
+        if whole:
+            return self._lowest(whole)
+        if not ordinary:
+            return passes[0] if passes else bombs[0]
+        # F3: no 2 and only group-breaking follows.
+        if width == 1:
+            triples = [a for a in ordinary if counts[self._rank(a)] == 3]
+            if triples:
+                return self._lowest(triples)
+        if smallest in (2, 3) or not passes:
+            return self._lowest(ordinary)
+        return passes[0]
+
+    def _lead(self, plays, whole, counts, groups, twos, smallest):
+        # L3: an opponent on one card -> lead a whole pair or larger.
+        if smallest == 1:
+            big = [a for a in whole if self._width(a) >= 2]
+            if big:
+                return self._lowest(big)
+        singles = [a for a in whole if counts[self._rank(a)] == 1]
+        # L2 split: no singles and B >= G -> lead one card of the lowest group.
+        if not singles and twos and twos >= groups:
+            split = [a for a in plays if self._width(a) == 1]
+            if split:
+                return self._lowest(split)
+        # L1: lowest single.
+        if singles:
+            return self._lowest(singles)
+        # L2: lowest whole group; do not open a 13-card hand with a quad.
+        if whole:
+            options = whole
+            if sum(counts.values()) >= 13:
+                options = [a for a in whole if self._width(a) < 4] or whole
+            return self._lowest(options)
+        return self._lowest(plays)
+
+    def respond(self, message: Mapping[str, Any]) -> dict[str, Any]:
+        # Section 5: heads-up play is solved exactly when the position rebuilds.
+        if self.heads_up_solver:
+            try:
+                round_ = ExperiencedAgent3._endgame_round(message)
+                if round_ is not None:
+                    result = solve_round(round_)
+                    if (result.player == message["player"]
+                            and result.best_action in message["request"]["legal_actions"]):
+                        return result.best_action
+            except (AttributeError, IndexError, KeyError, TypeError, ValueError):
+                pass
+        return super().respond(message)
