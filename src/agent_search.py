@@ -5,7 +5,7 @@ Only complete shared-world batches contribute to the final comparison.
 """
 
 from copy import copy
-from math import exp
+from math import exp, sqrt
 from time import perf_counter
 
 from src.president import Card, Round, standard_deck
@@ -128,14 +128,28 @@ def heuristic_action(agent, state):
     return min(actions, key=agent._play_scorer(message))
 
 
+def search_options(agent):
+    """(depth or None, through_own_turns, leaf_scale); defaults are the original search."""
+    return (getattr(agent, "search_depth", 16), getattr(agent, "search_through_own_turns", False),
+            getattr(agent, "search_leaf_scale", 1.0))
+
+
 def rollout(agent, world, player, action, deadline):
+    """Continue with the heuristic policy until a cutoff, our exit, or round end.
+
+    Cutoffs apply only at normal (play-phase) turns, so pending completion
+    windows are always resolved first: our next normal turn (unless
+    search_through_own_turns), or search_depth normal actions (None: no limit).
+    """
+    depth, through, _ = search_options(agent)
     state = clone(world)
     state.apply_action(player, action)
     normal = int(world.phase == "play")
     while not state.done and player in state.active:
         if perf_counter() >= deadline:
             return None
-        if state.phase == "play" and (state._actor() == player or normal >= 16):
+        if state.phase == "play" and ((not through and state._actor() == player)
+                                      or (depth is not None and normal >= depth)):
             break
         actor = state._actor()
         chosen = heuristic_action(agent, state)
@@ -147,7 +161,13 @@ def rollout(agent, world, player, action, deadline):
 
 
 def evaluate(agent, state, player):
-    """Expected fraction of other seats beaten, with exact resolved ordering."""
+    """Expected fraction of other seats beaten, with exact resolved ordering.
+
+    Once we have exited (or the round is finished) every pair is resolved:
+    remaining active seats necessarily place between normal finishers and
+    bomb/all-2s finishers, matching the engine's final rankings.
+    """
+    scale = search_options(agent)[2]
     costs = {}
 
     def cost(p):
@@ -176,8 +196,20 @@ def evaluate(agent, state, player):
         elif order(player) != (1, 0) or order(opponent) != (1, 0):
             total += order(player) < order(opponent)
         else:
-            total += 1.0 / (1.0 + exp(max(-60.0, min(60.0, cost(player) - cost(opponent)))))
+            total += 1.0 / (1.0 + exp(max(-60.0, min(60.0, scale * (cost(player) - cost(opponent))))))
     return total / (len(state.players) - 1)
+
+
+def significant(batches, best, margin):
+    """Paired test: does candidate best beat candidate 0 by margin standard errors?"""
+    n = len(batches)
+    if n < 2:
+        return False
+    d = [batch[best] - batch[0] for batch in batches]
+    mean = sum(d) / n
+    se = sqrt(sum((x - mean) ** 2 for x in d) / (n - 1) / n)
+    # With se == 0 this reduces to mean > 0.
+    return mean > margin * se
 
 
 def choose(agent, message, actions):
@@ -186,7 +218,8 @@ def choose(agent, message, actions):
     deadline = float("inf") if agent.search_time_ms is None else start + agent.search_time_ms / 1000
     stats = agent.last_search = {"worlds": 0, "candidates": 0, "fallback": True,
                                  "reason": "budget", "elapsed_ms": 0.0, "backend": "python",
-                                 "attempts": 0, "rejected_worlds": 0, "native_errors": 0}
+                                 "attempts": 0, "rejected_worlds": 0, "native_errors": 0,
+                                 "overrode": False, "heuristic_score": None, "chosen_score": None}
     try:
         distinct = unique_actions(actions)
         if len(distinct) == 1:
@@ -200,8 +233,10 @@ def choose(agent, message, actions):
         fallback = ranked[0]
         if not agent.search_worlds or perf_counter() >= deadline:
             return fallback
+        width = getattr(agent, "search_candidates", 4)
+        # Heuristic order is kept, so candidates[0] is the heuristic's choice.
         candidates = [a for i, a in enumerate(ranked)
-                      if i < 4 or a["type"] in {"pass", "decline_completion", "bomb"}]
+                      if i < width or a["type"] in {"pass", "decline_completion", "bomb"}]
         stats["candidates"] = len(candidates)
         try:
             prepared = prepare(agent, message)
@@ -214,6 +249,7 @@ def choose(agent, message, actions):
         if native is not None:
             stats["backend"] = "c"
         totals = [0.0] * len(candidates)
+        batches = []  # per-world scores, for the paired margin test
         # At most three replacement samples, within the original time budget.
         for _ in range(agent.search_worlds + 3):
             if stats["worlds"] >= agent.search_worlds or perf_counter() >= deadline:
@@ -250,11 +286,19 @@ def choose(agent, message, actions):
             if len(batch) != len(candidates) or perf_counter() >= deadline:
                 break
             totals = [total + value for total, value in zip(totals, batch)]
+            batches.append(batch)
             stats["worlds"] += 1
         if not stats["worlds"]:
             return fallback
         stats["fallback"] = False
         stats["reason"] = "search"
-        return candidates[max(range(len(candidates)), key=totals.__getitem__)]
+        best = max(range(len(candidates)), key=totals.__getitem__)
+        margin = getattr(agent, "search_margin", 0.0)
+        if margin > 0 and best and not significant(batches, best, margin):
+            best = 0
+        worlds = stats["worlds"]
+        stats.update(overrode=best != 0, heuristic_score=totals[0] / worlds,
+                     chosen_score=totals[best] / worlds)
+        return candidates[best]
     finally:
         stats["elapsed_ms"] = (perf_counter() - start) * 1000

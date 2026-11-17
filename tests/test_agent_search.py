@@ -197,6 +197,136 @@ class SearchTests(unittest.TestCase):
         self.assertIsNone(result.top_rank)
         self.assertTrue(all(a["type"] == "play" for a in result.legal_actions("a")))
 
+    def test_option_validation(self):
+        good = ExperiencedAgent4(search_depth=None, search_through_own_turns=True, search_leaf_scale=0,
+                                 search_candidates=1, search_margin=2)
+        self.assertEqual((good.search_depth, good.search_through_own_turns, good.search_leaf_scale,
+                          good.search_candidates, good.search_margin), (None, True, 0.0, 1, 2.0))
+        default = ExperiencedAgent4()
+        self.assertEqual((default.search_depth, default.search_through_own_turns, default.search_leaf_scale,
+                          default.search_candidates, default.search_margin), (16, False, 1.0, 4, 0.0))
+        for name, values in {"search_depth": (-1, 1.5, True, "4"),
+                             "search_through_own_turns": (1, None, "yes"),
+                             "search_leaf_scale": (-0.1, float("nan"), float("inf"), True, "1"),
+                             "search_candidates": (0, -2, 2.0, True, None),
+                             "search_margin": (-1, float("nan"), float("inf"), False, None)}.items():
+            for value in values:
+                with self.subTest(name=name, value=value), self.assertRaises(ValueError):
+                    ExperiencedAgent4(**{name: value})
+
+    def scripted_choice(self, rows, **options):
+        """Run choose with native batches returning rows[w] for world w."""
+        agent = ExperiencedAgent4(random.Random(5), search_time_ms=None, search_worlds=len(rows),
+                                  search_backend="python", **options)
+        message = self.state.message_for(self.state._actor())
+        actions = message["request"]["legal_actions"]
+        calls = []
+        def batch(lib, agent_, world, player, candidates, remaining):
+            row = rows[len(calls)]
+            calls.append(candidates)
+            return row + [0.0] * (len(candidates) - len(row))
+        with patch("src.agent_search_c.backend", return_value=object()), \
+             patch("src.agent_search_c.batch", side_effect=batch):
+            result = agent._choose_play(message, actions)
+        return result, calls[0], agent.last_search
+
+    def test_margin_paired_standard_error_rule(self):
+        # Candidate 1 beats the heuristic choice by 0.1 in every world: SE 0.
+        steady = [[0.5, 0.6]] * 3
+        for margin in (0, 1e9):
+            result, candidates, stats = self.scripted_choice(steady, search_margin=margin)
+            self.assertIs(result, candidates[1])
+            self.assertTrue(stats["overrode"])
+            self.assertAlmostEqual(stats["heuristic_score"], 0.5)
+            self.assertAlmostEqual(stats["chosen_score"], 0.6)
+        # d = (0.4, -0.2, 0.1): mean 0.1, SE = 0.3/sqrt(3) ~ 0.173.
+        noisy = [[0.1, 0.5], [0.6, 0.4], [0.3, 0.4]]
+        for margin, overrides in ((0, True), (0.5, True), (0.6, False), (5, False)):
+            with self.subTest(margin=margin):
+                result, candidates, stats = self.scripted_choice(noisy, search_margin=margin)
+                self.assertIs(result, candidates[1] if overrides else candidates[0])
+                self.assertEqual(stats["overrode"], overrides)
+                self.assertAlmostEqual(stats["heuristic_score"], 1.0 / 3)
+                self.assertAlmostEqual(stats["chosen_score"], 1.3 / 3 if overrides else 1.0 / 3)
+        # One world cannot establish significance; ties keep heuristic order.
+        result, candidates, stats = self.scripted_choice([[0.1, 0.9]], search_margin=0.01)
+        self.assertIs(result, candidates[0])
+        result, candidates, stats = self.scripted_choice([[0.5, 0.5]] * 2)
+        self.assertIs(result, candidates[0])
+        self.assertFalse(stats["overrode"])
+
+    def test_margin_on_real_search(self):
+        message = self.state.message_for(self.state._actor())
+        actions = message["request"]["legal_actions"]
+        heuristic = min(unique_actions(actions), key=self.agent._play_scorer(message))
+        for seed in range(4):
+            plain = ExperiencedAgent4(random.Random(seed), search_time_ms=None, search_worlds=4,
+                                      search_backend="python")
+            zero = ExperiencedAgent4(random.Random(seed), search_time_ms=None, search_worlds=4,
+                                     search_backend="python", search_margin=0.0)
+            strict = ExperiencedAgent4(random.Random(seed), search_time_ms=None, search_worlds=4,
+                                       search_backend="python", search_margin=1e6)
+            self.assertEqual(plain._choose_play(message, actions), zero._choose_play(message, actions))
+            self.assertEqual(plain.last_search["overrode"], zero.last_search["overrode"])
+            self.assertEqual(strict._choose_play(message, actions), heuristic)
+            self.assertFalse(strict.last_search["overrode"])
+            self.assertEqual(strict.last_search["reason"], "search")
+            self.assertIsNotNone(strict.last_search["heuristic_score"])
+            self.assertEqual(strict.last_search["heuristic_score"], strict.last_search["chosen_score"])
+
+    def test_candidate_count(self):
+        message = self.state.message_for(self.state._actor())
+        actions = message["request"]["legal_actions"]
+        ranked = sorted(unique_actions(actions), key=self.agent._play_scorer(message))
+        for width in (1, 2, 6):
+            agent = ExperiencedAgent4(random.Random(5), search_time_ms=None, search_worlds=1,
+                                      search_backend="python", search_candidates=width)
+            agent._choose_play(message, actions)
+            expected = sum(i < width or a["type"] in {"pass", "decline_completion", "bomb"}
+                           for i, a in enumerate(ranked))
+            self.assertEqual(agent.last_search["candidates"], expected)
+
+    def test_fallback_reports_no_scores(self):
+        message = self.state.message_for(self.state._actor())
+        actions = message["request"]["legal_actions"]
+        self.agent.search_time_ms = 0
+        self.agent._choose_play(message, actions)
+        self.assertFalse(self.agent.last_search["overrode"])
+        self.assertIsNone(self.agent.last_search["heuristic_score"])
+        self.assertIsNone(self.agent.last_search["chosen_score"])
+
+    def test_rollout_depth_and_own_turn_options(self):
+        player = self.state._actor()
+        action = self.state.legal_actions(player)[0]
+        def normal_actions(result):
+            return sum(e["type"] in {"played", "opening_play", "passed", "bombed"}
+                       for e in result.events[len(self.state.events):])
+        for depth in (1, 4, 30):
+            agent = ExperiencedAgent4(search_backend="python", search_depth=depth,
+                                      search_through_own_turns=True)
+            result = rollout(agent, self.state, player, action, float("inf"))
+            self.assertLessEqual(normal_actions(result), depth)
+            self.assertTrue(result.done or player not in result.active or normal_actions(result) == depth)
+        full = ExperiencedAgent4(search_backend="python", search_depth=None, search_through_own_turns=True)
+        result = rollout(full, self.state, player, action, float("inf"))
+        self.assertTrue(result.done or player not in result.active)
+        self.assertEqual(len(self.state.events), 1)
+
+    def test_leaf_scale(self):
+        state = clone(self.state)
+        flat = ExperiencedAgent4(search_backend="python", search_leaf_scale=0)
+        self.assertEqual(evaluate(flat, state, "a"), 0.5)
+        unit = ExperiencedAgent4(search_backend="python", search_leaf_scale=1)
+        self.assertEqual(evaluate(unit, state, "a"), evaluate(self.agent, state, "a"))
+        # A single unresolved pair: scaling sharpens the sigmoid around 0.5.
+        state.finish_order, state.bomb_finishers, state.active = ["c"], ["d"], {"a", "b"}
+        values = [evaluate(ExperiencedAgent4(search_backend="python", search_leaf_scale=s), state, "a")
+                  for s in (0, 1, 3)]
+        pair = [3 * v - 1 for v in values]  # beat c is 0, beat d is 1
+        self.assertEqual(pair[0], 0.5)
+        self.assertNotEqual(pair[1], 0.5)
+        self.assertGreater(abs(pair[2] - 0.5), abs(pair[1] - 0.5))
+
     def test_immediate_finish_does_not_sample(self):
         message = {"hand": [{"rank": "3", "suit": "C"}]}
         actions = [{"type": "pass"}, {"type": "play", "cards": message["hand"]}]

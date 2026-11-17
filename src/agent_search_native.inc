@@ -310,7 +310,10 @@ static int placement_order(const PresidentRound *r, int p) {
     for (i = 0; i < r->bomb_count; ++i) if (r->bomb_finishers[i] == p) return 8+i;
     return 4;
 }
-static double leaf(const SearchContext *s, const PresidentRound *r, int p) {
+/* Once p has exited or the round is finished, every pair is resolved:
+ * remaining active seats necessarily rank after normal finishers and before
+ * bomb/all-2s finishers, exactly as check_end assigns final rankings. */
+static double leaf(const SearchContext *s, const SearchOptions *o, const PresidentRound *r, int p) {
     int q, own_order = placement_order(r,p), has_own = 0;
     double total = 0, own = 0;
     for (q = 0; q < 4; ++q) if (q != p) {
@@ -327,7 +330,7 @@ static double leaf(const SearchContext *s, const PresidentRound *r, int p) {
             }
             evaluation(&e,s,r,q);
             other = r->top_rank < 0 && president_round_actor(r) == q ? lead_cost(&e,e.hand) : hand_cost(&e,e.hand);
-            difference = larger(-60,smaller(60,own-other));
+            difference = larger(-60,smaller(60,o->leaf_scale*(own-other)));
             total += 1/(1+exp(difference));
         }
     }
@@ -339,7 +342,12 @@ static int apply_search(PresidentRound *r, int actor, const PresidentAction *a) 
     r->event_count = r->history_count = 0;
     return president_round_apply(r,actor,a,NULL) == PRESIDENT_OK;
 }
-static int simulate(const SearchContext *s, PresidentRound *r, int p, const PresidentAction *a, double deadline) {
+/* Every play-phase action removes cards or eventually returns the lead, so
+ * even unlimited rollouts terminate; the deadline is still checked per action.
+ * apply_search resets the scratch logs, so each action needs at most the
+ * 16 events and one history entry reserved by apply, however long the rollout. */
+static int simulate(const SearchContext *s, const SearchOptions *o, PresidentRound *r, int p,
+        const PresidentAction *a, double deadline) {
     int normal = r->phase == PLAY;
     if (!apply_search(r,p,a)) return -1;
     while (r->phase != FINISHED && r->active[p]) {
@@ -347,7 +355,7 @@ static int simulate(const SearchContext *s, PresidentRound *r, int p, const Pres
         PresidentAction chosen;
         if (search_now() >= deadline) return 0;
         actor = president_round_actor(r);
-        if (r->phase == PLAY && (actor == p || normal >= 16)) break;
+        if (r->phase == PLAY && ((!o->through_own_turns && actor == p) || (o->depth >= 0 && normal >= o->depth))) break;
         chosen = policy(s,r,actor);
         if (search_now() >= deadline) return 0;
         normal += r->phase == PLAY;
@@ -385,7 +393,14 @@ int president_hand_value(const int hand[13], const int unseen[13], const int ord
     *value = lead ? lead_cost(&e,e.hand) : hand_cost(&e,e.hand);
     return 1;
 }
-int president_search_version(void) { return 1; }
+static const SearchOptions default_options = {16, 0, 1.0};
+static const SearchOptions *search_options(const SearchOptions *o) {
+    if (!o) return &default_options;
+    if ((o->through_own_turns != 0 && o->through_own_turns != 1) ||
+        !isfinite(o->leaf_scale) || o->leaf_scale < 0) return NULL;
+    return o;
+}
+int president_search_version(void) { return 2; }
 int president_search_policy(const SearchPosition *position, const double w[18], PresidentAction *out) {
     PresidentRound r; SearchContext s;
     if (!out || !valid_weights(w) || !load_position(&r,position) || r.phase == FINISHED) return -1;
@@ -393,12 +408,13 @@ int president_search_policy(const SearchPosition *position, const double w[18], 
     return (int)out->type < 0 ? -1 : 1;
 }
 int president_search_batch(const SearchPosition *position, int p, const PresidentAction *a,
-        int count, const double w[18], double budget_ms, double *scores) {
+        int count, const double w[18], const SearchOptions *options, double budget_ms, double *scores) {
     PresidentRound base;
     SearchContext s;
     double deadline = budget_ms < 0 ? HUGE_VAL : search_now()+budget_ms/1000;
+    const SearchOptions *o = search_options(options);
     int i;
-    if (!valid_player(p) || !a || !scores || count < 1 || count > 200 ||
+    if (!o || !valid_player(p) || !a || !scores || count < 1 || count > 200 ||
         !isfinite(budget_ms) || !valid_weights(w) || !load_position(&base,position) || president_round_actor(&base) != p) return -1;
     search_context(&s,w);
     for (i = 0; i < count; ++i) {
@@ -407,9 +423,9 @@ int president_search_batch(const SearchPosition *position, int p, const Presiden
         int result;
         r.events = events; r.event_capacity = 16; r.history = history; r.history_capacity = 1;
         if (search_now() >= deadline) return 0;
-        result = simulate(&s,&r,p,&a[i],deadline);
+        result = simulate(&s,o,&r,p,&a[i],deadline);
         if (result != 1) return result;
-        scores[i] = leaf(&s,&r,p);
+        scores[i] = leaf(&s,o,&r,p);
         if (search_now() >= deadline) return 0;
     }
     return 1;
@@ -427,12 +443,13 @@ int president_search_scores(const SearchPosition *position, int p, const Preside
     return 1;
 }
 int president_search_rollout(const SearchPosition *position, int p, const PresidentAction *a,
-        const double w[18], SearchPosition *out, double *score) {
+        const double w[18], const SearchOptions *options, SearchPosition *out, double *score) {
     PresidentRound r; SearchContext s; Event events[16]; History history[1]; int status;
-    if (!valid_player(p) || !a || !out || !score || !valid_weights(w) || !load_position(&r,position)) return -1;
+    const SearchOptions *o = search_options(options);
+    if (!o || !valid_player(p) || !a || !out || !score || !valid_weights(w) || !load_position(&r,position)) return -1;
     search_context(&s,w);
     r.events = events; r.event_capacity = 16; r.history = history; r.history_capacity = 1;
-    status = simulate(&s,&r,p,a,HUGE_VAL);
+    status = simulate(&s,o,&r,p,a,HUGE_VAL);
     if (status != 1) return status;
-    save_position(out,&r); *score = leaf(&s,&r,p); return 1;
+    save_position(out,&r); *score = leaf(&s,o,&r,p); return 1;
 }

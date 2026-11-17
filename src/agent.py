@@ -1018,7 +1018,10 @@ class ExperiencedAgent4(ExperiencedAgent3Tuned):
 
     def __init__(self, rng: Optional[random.Random] = None, *,
                  search_time_ms: float | None = 50.0, search_worlds: int = 8,
-                 search_backend: str = "auto", evaluation_backend: str = "auto"):
+                 search_backend: str = "auto", evaluation_backend: str = "auto",
+                 search_depth: int | None = 16, search_through_own_turns: bool = False,
+                 search_leaf_scale: float = 1.0, search_candidates: int = 4,
+                 search_margin: float = 0.0):
         super().__init__(evaluation_backend=evaluation_backend)
         if search_backend not in {"auto", "python", "c"}:
             raise ValueError("search_backend must be auto, python, or c")
@@ -1026,10 +1029,26 @@ class ExperiencedAgent4(ExperiencedAgent3Tuned):
             raise ValueError("search_time_ms must be nonnegative or None")
         if isinstance(search_worlds, bool) or not isinstance(search_worlds, int) or search_worlds < 0:
             raise ValueError("search_worlds must be a nonnegative integer")
+        if search_depth is not None and (isinstance(search_depth, bool) or not isinstance(search_depth, int)
+                                         or search_depth < 0):
+            raise ValueError("search_depth must be a nonnegative integer or None")
+        if not isinstance(search_through_own_turns, bool):
+            raise ValueError("search_through_own_turns must be a bool")
+        for name, value in (("search_leaf_scale", search_leaf_scale), ("search_margin", search_margin)):
+            if isinstance(value, bool) or not isinstance(value, (int, float)) or not isfinite(value) or value < 0:
+                raise ValueError(f"{name} must be a finite nonnegative number")
+        if isinstance(search_candidates, bool) or not isinstance(search_candidates, int) or search_candidates < 1:
+            raise ValueError("search_candidates must be a positive integer")
         self.rng = rng if rng is not None else random.Random(0)
         self.search_time_ms = search_time_ms
         self.search_worlds = search_worlds
         self.search_backend = search_backend
+        # Rollout/selection controls; defaults reproduce the original search.
+        self.search_depth = search_depth
+        self.search_through_own_turns = search_through_own_turns
+        self.search_leaf_scale = float(search_leaf_scale)
+        self.search_candidates = search_candidates
+        self.search_margin = float(search_margin)
         self.last_search = {}
 
     def _choose_play(self, message, actions):

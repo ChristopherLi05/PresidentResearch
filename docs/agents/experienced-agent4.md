@@ -20,6 +20,35 @@ python_reference = ExperiencedAgent4(search_backend="python")
 native_required = ExperiencedAgent4(search_backend="c")
 ```
 
+### Search experiment controls
+
+These keyword-only arguments exist so tuning harnesses can sweep the search.
+Their defaults reproduce the original search exactly (same scores, same
+decisions, both backends):
+
+| Argument | Default | Meaning |
+| --- | --- | --- |
+| `search_depth` | `16` | Max normal (play-phase) actions per rollout, counting the root action when it is one. `None` = unlimited. Pending completion windows are resolved before the cutoff. |
+| `search_through_own_turns` | `False` | `True` continues past our own next normal turn; our later moves use the same heuristic rollout policy. |
+| `search_leaf_scale` | `1.0` | Leaf sigmoid for unresolved pairs is `1/(1+exp(clamp(scale*(our_cost-opp_cost))))`. Finite, >= 0; `0` makes unresolved pairs 0.5. |
+| `search_candidates` | `4` | Number of top heuristic actions evaluated (>= 1); legal pass/decline/bomb options are always added. |
+| `search_margin` | `0.0` | Python-side override rule. With `margin > 0`, the best-total candidate replaces the heuristic's first choice only if the mean paired per-world difference exceeds `margin` standard errors (sample std, n-1, over sqrt(n)); with fewer than two worlds the heuristic choice is kept. `0` keeps the plain argmax with heuristic tie order. |
+
+`search_depth=None, search_through_own_turns=True` plays every rollout out
+until we exit or the round ends, so the leaf is the exact fraction of the
+other three seats we beat in that playout (seats still active when we leave
+rank behind normal finishers and ahead of bomb/all-2s finishers) and the
+sigmoid is not used. Rollouts always terminate and still honour the deadline.
+
+`last_search` additionally reports `overrode` (search result used and differs
+from the heuristic's first choice), `heuristic_score` and `chosen_score`
+(mean leaf value per completed world; `None` without completed worlds).
+
+The native ABI is version 2: `president_search_batch` and
+`president_search_rollout` take a `const SearchOptions *`
+(`{int depth; int through_own_turns; double leaf_scale;}`, negative depth =
+unlimited, `NULL` = defaults). Rebuild the library after updating.
+
 ### Shared hand evaluation for earlier agents
 
 `ExperiencedAgent2`, `ExperiencedAgent3`, `ExperiencedAgent3Tuned`, and Agent4
@@ -83,8 +112,8 @@ inherited exact solver or trade/draft paths.
 ## Decisions and simulated information
 
 Suit-equivalent plays collapse to the first supplied legal representative.
-The four best heuristic actions plus legal pass/decline and bomb options are
-evaluated. Each sampled allocation is shared across every candidate. Only
+The four (`search_candidates`) best heuristic actions plus legal pass/decline
+and bomb options are evaluated. Each sampled allocation is shared across every candidate. Only
 complete batches contribute; timeout before the first batch returns the
 original heuristic choice. Final ties retain heuristic order.
 
@@ -96,8 +125,9 @@ unplayed 2s use the heuristic fallback. No host-private hands are inspected.
 Engine transitions resolve completion windows, skips, clears, and
 penalties. Continuations use Agent4's heuristic from each acting player's
 private hand plus public history, without recursive search or exact solving.
-They stop at our next normal turn, our exit, round end, or 16 normal actions;
-pending completion windows are resolved before the depth cutoff. A bomb can
+By default they stop at our next normal turn, our exit, round end, or 16 normal
+actions (see the controls above); pending completion windows are resolved
+before the depth cutoff. A bomb can
 therefore stop immediately before our required follow-up lead.
 
 The leaf evaluator averages pairwise finishing preferences against the

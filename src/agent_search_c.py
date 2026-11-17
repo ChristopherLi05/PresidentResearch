@@ -35,6 +35,14 @@ class Position(ct.Structure):
             "completion_count", "cursor", "pending_player", "pending_skip")] + [("rankings", ct.c_int * 4)]
 
 
+class Options(ct.Structure):
+    """Rollout controls (SearchOptions); depth < 0 means unlimited."""
+    _fields_ = [("depth", ct.c_int), ("through_own_turns", ct.c_int), ("leaf_scale", ct.c_double)]
+
+
+ABI_VERSION = 2
+
+
 def library_path():
     name = "agent_search.dll" if os.name == "nt" else "libagent_search.dylib" if sys.platform == "darwin" else "libagent_search.so"
     return ROOT / "build" / name
@@ -66,14 +74,16 @@ def load_library(path):
     lib = ct.CDLL(str(path))
     lib.president_search_version.argtypes = []
     lib.president_search_version.restype = ct.c_int
-    if lib.president_search_version() != 1:
+    if lib.president_search_version() != ABI_VERSION:
         raise RuntimeError("Native search ABI mismatch; rebuild the library")
     base = [ct.POINTER(Position), ct.c_int, ct.POINTER(_Action)]
     signatures = {
         "policy": [ct.POINTER(Position), ct.POINTER(ct.c_double), ct.POINTER(_Action)],
-        "batch": base + [ct.c_int, ct.POINTER(ct.c_double), ct.c_double, ct.POINTER(ct.c_double)],
+        "batch": base + [ct.c_int, ct.POINTER(ct.c_double), ct.POINTER(Options), ct.c_double,
+                         ct.POINTER(ct.c_double)],
         "scores": base + [ct.c_int, ct.POINTER(ct.c_double), ct.POINTER(ct.c_double)],
-        "rollout": base + [ct.POINTER(ct.c_double), ct.POINTER(Position), ct.POINTER(ct.c_double)],
+        "rollout": base + [ct.POINTER(ct.c_double), ct.POINTER(Options), ct.POINTER(Position),
+                           ct.POINTER(ct.c_double)],
     }
     for name, args in signatures.items():
         function = getattr(lib, "president_search_" + name)
@@ -206,6 +216,14 @@ def weights(agent):
     return (ct.c_double * len(WEIGHTS))(*(getattr(agent, name) for name in WEIGHTS))
 
 
+def options(agent):
+    """Native mirror of agent_search.search_options."""
+    from src.agent_search import search_options
+    depth, through, scale = search_options(agent)
+    depth = -1 if depth is None else min(depth, 2**31 - 1)
+    return Options(depth, int(through), scale)
+
+
 class NativeSearchRejected(ValueError):
     """The native simulation could not process this sampled world."""
 
@@ -215,7 +233,8 @@ def batch(lib, agent, world, player, actions, budget_ms):
     native_actions = (_Action * len(actions))(*(_encode_action(a) for a in actions))
     scores = (ct.c_double * len(actions))()
     status = lib.president_search_batch(ct.byref(position), world.players.index(player), native_actions,
-                                        len(actions), weights(agent), budget_ms, scores)
+                                        len(actions), weights(agent), ct.byref(options(agent)),
+                                        budget_ms, scores)
     if status < 0:
         raise NativeSearchRejected("Native search rejected the position or root action")
     return list(scores) if status else None
