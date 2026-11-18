@@ -17,6 +17,8 @@ from src.president import RANKS, SUITS
 from src.president_c import _Action, _encode_action
 
 ROOT = Path(__file__).resolve().parents[1]
+SOURCES = ("president.c", "president.h", "agent_search_native.inc", "agent_search_native.h",
+           "agent_belief_native.inc")
 WEIGHTS = ("CONTROL_RESERVE_WEIGHT", "GROUP_WEIGHT", "CARD_WEIGHT", "SINGLE_WEIGHT",
            "HAND_CONTROL_WEIGHT", "BOMB_GROUP_PENALTY", "BOMB_COVER_PENALTY", "BOMB_VALUE",
            "LEAD_CONTROL_WEIGHT", "BOMB_STRANDING_PENALTY", "PASS_COST", "PASS_DANGER_WEIGHT",
@@ -40,7 +42,12 @@ class Options(ct.Structure):
     _fields_ = [("depth", ct.c_int), ("through_own_turns", ct.c_int), ("leaf_scale", ct.c_double)]
 
 
-ABI_VERSION = 2
+class BeliefObservation(ct.Structure):
+    """Mirror of the C BeliefObservation; see agent_belief.native_observations."""
+    _fields_ = [("kind", ct.c_int), ("offset", ct.c_int * 13), ("data", ct.c_int * 4)]
+
+
+ABI_VERSION = 3
 
 
 def library_path():
@@ -91,6 +98,14 @@ def load_library(path):
     lib.president_hand_value.argtypes = [ct.POINTER(ct.c_int)] * 4 + [
         ct.c_int, ct.POINTER(ct.c_double), ct.c_int, ct.POINTER(ct.c_double)]
     lib.president_hand_value.restype = ct.c_int
+    lib.president_belief_walk.argtypes = [
+        ct.c_int, ct.POINTER(ct.c_int), ct.POINTER(ct.c_int), ct.POINTER(ct.c_int * 13),
+        ct.POINTER(BeliefObservation), ct.POINTER(ct.c_int), ct.c_double, ct.c_int,
+        ct.POINTER(ct.c_uint64), ct.POINTER(ct.c_int)]
+    lib.president_belief_walk.restype = ct.c_int
+    lib.president_belief_loglik.argtypes = [ct.POINTER(ct.c_int), ct.POINTER(BeliefObservation), ct.c_int,
+                                            ct.c_double, ct.POINTER(ct.c_double)]
+    lib.president_belief_loglik.restype = ct.c_int
     return lib
 
 
@@ -98,7 +113,7 @@ def load_library(path):
 def hand_library():
     """Resolve once per process; rebuilding a loaded DLL needs a new process."""
     path = library_path()
-    sources = ("president.c", "president.h", "agent_search_native.inc", "agent_search_native.h")
+    sources = SOURCES
     if not path.is_file() or any((ROOT / "src" / name).stat().st_mtime_ns > path.stat().st_mtime_ns for name in sources):
         return None
     try:
@@ -175,7 +190,7 @@ def backend(agent):
         return None
     try:
         path = library_path()
-        sources = ("president.c", "president.h", "agent_search_native.inc", "agent_search_native.h")
+        sources = SOURCES
         if not path.is_file() or any((ROOT / "src" / name).stat().st_mtime_ns > path.stat().st_mtime_ns for name in sources):
             raise RuntimeError("Native search is missing or stale; run python -m src.agent_search_c --build")
         return load_library(str(path))

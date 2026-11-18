@@ -22,7 +22,16 @@ typedef struct {
     int depth, through_own_turns;
     double leaf_scale;
 } SearchOptions;
-/* ABI version 2; weights order is defined in agent_search_c.py. */
+/* One piece of opponent evidence for the modeled sampler (agent_belief.py).
+ * Counts at that moment are current counts + offset (floored at 0).
+ * kind/data: 0 play {top rank or -1, width, smallest, observed (-1 pass,
+ * -2 bomb, rank*8+width)}; 1 no completion {rank, needed}; 2 trade request
+ * {failed-rank bitmask, requested rank}; 3 none {rank, later returns};
+ * 4 some {rank}; 5 first-round opening {count of 3s}. */
+typedef struct {
+    int kind, offset[13], data[4];
+} BeliefObservation;
+/* ABI version 3; weights order is defined in agent_search_c.py. */
 int president_search_version(void);
 int president_hand_value(const int hand[13], const int unseen[13],
     const int order[13], const int sizes[3], int opponents,
@@ -41,4 +50,15 @@ int president_search_rollout(const SearchPosition *, int player,
     const PresidentAction *, const double weights[18], const SearchOptions *,
     SearchPosition *, double *score);
 int president_search_policy(const SearchPosition *, const double weights[18], PresidentAction *);
+/* Modeled opponent hands. Runs `steps` Metropolis swaps in place on `cards`
+ * (card codes rank*4+suit; opponent p owns slots[p] consecutive entries),
+ * scoring each opponent's counts (cards plus pinned[p]) against their own
+ * consecutive obs_count[p] observations. rng is splitmix64 state, updated.
+ * stats[0] += steps, stats[1] += accepted swaps. Returns 1, or -1 if invalid. */
+int president_belief_walk(int opponents, const int slots[3], int *cards, const int pinned[3][13],
+    const BeliefObservation *obs, const int obs_count[3], double noise,
+    int steps, uint64_t *rng, int *stats);
+/* Diagnostic: log weight of one hand (agent_belief.log_likelihood). */
+int president_belief_loglik(const int counts[13], const BeliefObservation *obs, int count,
+    double noise, double *out);
 #endif

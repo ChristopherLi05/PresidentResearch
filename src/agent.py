@@ -1021,8 +1021,16 @@ class ExperiencedAgent4(ExperiencedAgent3Tuned):
                  search_backend: str = "auto", evaluation_backend: str = "auto",
                  search_depth: int | None = 16, search_through_own_turns: bool = False,
                  search_leaf_scale: float = 1.0, search_candidates: int = 4,
-                 search_margin: float = 0.0):
+                 search_margin: float = 0.0, search_sampling: str = "uniform",
+                 search_random_fraction: float = 0.25, search_model_noise: float = 0.2):
         super().__init__(evaluation_backend=evaluation_backend)
+        if search_sampling not in {"uniform", "modeled"}:
+            raise ValueError("search_sampling must be uniform or modeled")
+        for name, value, low_open in (("search_random_fraction", search_random_fraction, False),
+                                      ("search_model_noise", search_model_noise, True)):
+            if (isinstance(value, bool) or not isinstance(value, (int, float)) or not isfinite(value)
+                    or not (0 < value <= 1 if low_open else 0 <= value <= 1)):
+                raise ValueError(f"{name} must be in {'(0' if low_open else '[0'}, 1]")
         if search_backend not in {"auto", "python", "c"}:
             raise ValueError("search_backend must be auto, python, or c")
         if search_time_ms is not None and (not isfinite(search_time_ms) or search_time_ms < 0):
@@ -1049,7 +1057,36 @@ class ExperiencedAgent4(ExperiencedAgent3Tuned):
         self.search_leaf_scale = float(search_leaf_scale)
         self.search_candidates = search_candidates
         self.search_margin = float(search_margin)
+        # World sampling: "uniform" is the original sampler; "modeled" weights
+        # deals by the HumanRulesAgent3 opponent model (src/agent_belief.py),
+        # keeping search_random_fraction of worlds uniform.
+        self.search_sampling = search_sampling
+        self.search_random_fraction = float(search_random_fraction)
+        self.search_model_noise = float(search_model_noise)
+        self._returned: tuple[Any, list] = (None, [])
         self.last_search = {}
+
+    @staticmethod
+    def _round_key(message):
+        events = message.get("events") or [{}]
+        return repr(events[0])
+
+    def returned_cards(self, message):
+        """Cards we returned in this round's trades, as (card, receiver)."""
+        key, cards = self._returned
+        return list(cards) if key == self._round_key(message) else []
+
+    def _trade_return(self, message, actions):
+        action = super()._trade_return(message, actions)
+        receiver = next((e["receiver"] for e in reversed(message.get("events", []))
+                         if e.get("type") == "trade_requested" and e.get("initiator") == message["player"]
+                         and e.get("success")), None)
+        key = self._round_key(message)
+        if self._returned[0] != key:
+            self._returned = (key, [])
+        if receiver is not None:
+            self._returned[1].append((dict(action["card"]), receiver))
+        return action
 
     def _choose_play(self, message, actions):
         from src.agent_search import choose
@@ -1115,6 +1152,29 @@ class ExperiencedAgent4(ExperiencedAgent3Tuned):
                 + self.NEXT_BOMB_PENALTY * bomb
                 + self.NEXT_FINISH_PENALTY * min(1.0, finish)
                 + self.NEXT_COMPLETION_PENALTY * completion)
+
+
+
+class ExperiencedAgent4Modeled(ExperiencedAgent4):
+    """ExperiencedAgent4 with the strongest tuned search and modeled hands.
+
+    Search settings are those of ``search_variants:ExperiencedAgent4Full64M2``
+    (64 worlds, rollouts to the end of the round, override margin 2, turn-order
+    danger weights off). ``search_sampling`` defaults to ``"modeled"``: worlds
+    are weighted by the HumanRulesAgent3 opponent model, with 25% still dealt
+    uniformly. Pass ``search_sampling="uniform"`` for the unmodeled
+    counterpart. See docs/search-sampling.md.
+    """
+
+    NEXT_RESPONSE_PENALTY = 0.0
+    NEXT_FINISH_PENALTY = 0.0
+    NEXT_COMPLETION_PENALTY = 0.0
+    NEXT_BOMB_PENALTY = 0.0
+    SEARCH = {"search_worlds": 64, "search_margin": 2.0, "search_depth": None,
+              "search_through_own_turns": True, "search_sampling": "modeled"}
+
+    def __init__(self, rng: Optional[random.Random] = None, **kwargs):
+        super().__init__(rng, **{**self.SEARCH, **kwargs})
 
 
 class SwitchPAgent(ExperiencedAgent):

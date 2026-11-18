@@ -128,6 +128,52 @@ def heuristic_action(agent, state):
     return min(actions, key=agent._play_scorer(message))
 
 
+def uniform_slot(index, fraction):
+    """Spread uniform worlds evenly: attempt ``index`` is uniform iff a multiple
+    of ``fraction`` is crossed (0.25 -> attempts 3, 7, 11, ...)."""
+    return int((index + 1) * fraction) > int(index * fraction)
+
+
+def world_sampler(agent, message, prepared, stats):
+    """Return ``sample(attempt_index) -> world`` for the agent's sampling mode.
+
+    ``uniform`` (the default) is exactly the original sampler. ``modeled``
+    draws most worlds from :class:`src.agent_belief.BeliefSampler` and the
+    ``search_random_fraction`` share uniformly.
+    """
+    player = message["player"]
+    mode = getattr(agent, "search_sampling", "uniform")
+    stats["sampling"] = mode
+    if mode == "uniform":
+        return lambda index: sample_world(prepared, player, agent.rng)
+    from src.agent_belief import BeliefSampler
+    fraction = getattr(agent, "search_random_fraction", 0.25)
+    try:
+        from src import agent_search_c
+        native = agent_search_c.backend(agent)
+        belief = BeliefSampler(prepared, player, message, agent.rng,
+                               noise=getattr(agent, "search_model_noise", 0.2),
+                               returned=agent.returned_cards(message) if hasattr(agent, "returned_cards") else (),
+                               native=native)
+        stats["belief_backend"] = "python" if native is None else "c"
+    except (KeyError, IndexError, TypeError, ValueError):
+        # A history the evidence extractor cannot read: deal uniformly.
+        stats["sampling"] = "uniform_fallback"
+        return lambda index: sample_world(prepared, player, agent.rng)
+    stats.update(modeled_worlds=0, uniform_worlds=0)
+
+    def sample(index):
+        if uniform_slot(index, fraction):
+            stats["uniform_worlds"] += 1
+            return sample_world(prepared, player, agent.rng)
+        world = belief.sample()
+        stats["modeled_worlds"] += 1
+        stats["belief_ms"] = belief.elapsed * 1000
+        stats["belief_acceptance"] = belief.accepted / max(1, belief.steps)
+        return world
+    return sample
+
+
 def search_options(agent):
     """(depth or None, through_own_turns, leaf_scale); defaults are the original search."""
     return (getattr(agent, "search_depth", 16), getattr(agent, "search_through_own_turns", False),
@@ -248,14 +294,15 @@ def choose(agent, message, actions):
         native = agent_search_c.backend(agent)
         if native is not None:
             stats["backend"] = "c"
+        sample = world_sampler(agent, message, prepared, stats)
         totals = [0.0] * len(candidates)
         batches = []  # per-world scores, for the paired margin test
         # At most three replacement samples, within the original time budget.
         for _ in range(agent.search_worlds + 3):
             if stats["worlds"] >= agent.search_worlds or perf_counter() >= deadline:
                 break
+            world = sample(stats["attempts"])
             stats["attempts"] += 1
-            world = sample_world(prepared, message["player"], agent.rng)
             # After a play the rules retire every all-2s hand. Such a sampled
             # active opponent contradicts public state and can have no lead.
             if any(not world.hands[p] or all(c.rank == "2" for c in world.hands[p])

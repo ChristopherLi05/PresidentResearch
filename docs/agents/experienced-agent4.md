@@ -33,6 +33,9 @@ decisions, both backends):
 | `search_leaf_scale` | `1.0` | Leaf sigmoid for unresolved pairs is `1/(1+exp(clamp(scale*(our_cost-opp_cost))))`. Finite, >= 0; `0` makes unresolved pairs 0.5. |
 | `search_candidates` | `4` | Number of top heuristic actions evaluated (>= 1); legal pass/decline/bomb options are always added. |
 | `search_margin` | `0.0` | Python-side override rule. With `margin > 0`, the best-total candidate replaces the heuristic's first choice only if the mean paired per-world difference exceeds `margin` standard errors (sample std, n-1, over sqrt(n)); with fewer than two worlds the heuristic choice is kept. `0` keeps the plain argmax with heuristic tie order. |
+| `search_sampling` | `"uniform"` | How opponent hands are dealt in each world. `"uniform"` is the original sampler (bit-identical decisions). `"modeled"` weights deals by the opponent model below. |
+| `search_random_fraction` | `0.25` | In `"modeled"` mode, the share of worlds still dealt uniformly, spread evenly (0.25: attempts 3, 7, 11, ...). In `[0, 1]`. |
+| `search_model_noise` | `0.2` | Likelihood factor for an opponent action the rules would not have chosen. In `(0, 1]`; 1 makes the model uninformative. |
 
 `search_depth=None, search_through_own_turns=True` plays every rollout out
 until we exit or the round ends, so the leaf is the exact fraction of the
@@ -44,7 +47,7 @@ sigmoid is not used. Rollouts always terminate and still honour the deadline.
 from the heuristic's first choice), `heuristic_score` and `chosen_score`
 (mean leaf value per completed world; `None` without completed worlds).
 
-The native ABI is version 2: `president_search_batch` and
+The native ABI is version 3 (version 3 added the modeled-sampling walk, see below): `president_search_batch` and
 `president_search_rollout` take a `const SearchOptions *`
 (`{int depth; int through_own_turns; double leaf_scale;}`, negative depth =
 unlimited, `NULL` = defaults). Rebuild the library after updating.
@@ -117,9 +120,9 @@ and bomb options are evaluated. Each sampled allocation is shared across every c
 complete batches contribute; timeout before the first batch returns the
 original heuristic choice. Final ties retain heuristic order.
 
-Sampling is uniform over unseen cards with public hand sizes. It does not
-infer holdings from voluntary passes or implement history-weighted trade or
-draft inference. Missing/inconsistent histories and previously announced
+By default (`search_sampling="uniform"`) sampling is uniform over unseen
+cards with public hand sizes. `search_sampling="modeled"` uses the opponent
+model described below. Missing/inconsistent histories and previously announced
 unplayed 2s use the heuristic fallback. No host-private hands are inspected.
 
 Engine transitions resolve completion windows, skips, clears, and
@@ -188,3 +191,86 @@ complete successful batches contribute; if none succeed, the legal heuristic
 choice is returned. `last_search` exposes `attempts`, `rejected_worlds`, and
 `native_errors` so repeated failures remain visible. Configuration and unrelated
 programming errors are not swallowed.
+
+
+## Modeled opponent hands
+
+Full writeup: [search-sampling.md](../search-sampling.md).
+
+`search_sampling="modeled"` (`src/agent_belief.py`) assumes opponents roughly
+follow the table-side rules of `HumanRulesAgent3`
+([docs/interpretation/experiencedagent3-human.md](../interpretation/experiencedagent3-human.md)).
+Each decision extracts public evidence once:
+
+| Evidence | Model |
+| --- | --- |
+| Pile chosen with a face-up card | The card is pinned to the drafter, unless a trade could have moved it (drafter was a trade initiator, or later gave that rank). Otherwise the drafter's pre-trade hand held that rank. |
+| Failed trade request | The receiver held none of that rank. A count up to the number of later returns to them scores `0.3` (a return can be that rank). |
+| Successful trade request | The initiator holds that rank after the exchange. |
+| Requested rank | Compared with T1/T2/T2b on the approximate pre-trade hand (returned cards are unknown and ignored). |
+| Our own returned card | Pinned to the receiver unless they later gave that rank back. Agent4 remembers it from its `trade_return` decision. |
+| Every lead, follow, pass, bomb | Compared with a rank-level port of the play rules (0, L1-L3, F1-F3), given the board and smallest opponent at that moment. |
+| Completion window closed without a completion | Compared with C1 for every active opponent. |
+| Active hand of only 2s | Impossible (it would have been announced). |
+
+Played cards are public, so an opponent's ranks at an earlier moment are their
+current ranks plus what they have played since; each observation is a test on
+the sampled current hand. A match scores 1, a mismatch `search_model_noise`,
+and near-certain facts 0.02. A Metropolis chain swaps unpinned cards between
+opponents (step counts per free card: warm-up 40 and gap 0.5 in C, 10 and 0.25 in Python), with
+per-hand log-likelihoods cached by rank counts. `search_random_fraction` of
+worlds are still uniform, so the search keeps some robustness when opponents do
+not play like the rules. A history the extractor cannot read falls back to
+uniform (`last_search["sampling"] == "uniform_fallback"`).
+
+`last_search` adds `sampling`, `belief_backend`, `modeled_worlds`,
+`uniform_worlds`, `belief_ms` and `belief_acceptance`. The swap walk runs in
+C (`president_belief_walk` in `src/agent_belief_native.inc`) whenever the
+native search backend is in use, at about 1.5 ms per decision. Otherwise the
+Python walk runs with shorter chains. Evidence extraction stays in Python.
+
+The rank-level rules are tested to equal `HumanRulesAgent3` exactly
+(`tests/test_agent_belief.py`). At a table of `HumanRulesAgent3` players, true
+hands violate none of about 47,000 play, pin and completion observations.
+Trade-request observations are violated about 3% of the time because returned
+cards are unknown, and successful-request observations about 1%.
+
+`belief_diagnostic.py` measures inference quality directly. It compares sampled
+opponent rank counts with the true hands at each Agent4 decision, for both
+samplers on the same positions. Against `ExperiencedAgent3Tuned` (12 games,
+364 decisions, 32 worlds), per-opponent L1 rank-count error fell from 5.87
+(uniform) to 4.04 (modeled). Early play (fewer than 40 events) went from 9.04
+to 7.08, and midgame from 3.36 to 1.64. The share of exactly right
+(opponent, rank) cells rose from 0.65 to 0.77. Sampling cost about 18-27 ms per
+decision for 32 worlds.
+
+### Playing strength
+
+`tune_search.py` A/B tests on identical deals, all six 2v2 seatings, with the
+`full64m2` search (64 worlds, rollouts to the end, margin 2, danger 0, no
+deadline). Differences are paired per game (modeled minus uniform; negative is
+better):
+
+| Opponents | Variant | Mean placement | Paired difference vs uniform (95% CI) |
+| --- | --- | --- | --- |
+| ExperiencedAgent3Tuned, 9,000 games, seed 2027 | uniform | 2.311 | |
+| | modeled, 25% random | 2.193 | -0.117 (-0.131 to -0.103) |
+| | modeled, 0% random | 2.183 | -0.127 (-0.141 to -0.113) |
+| | modeled, 50% random | 2.209 | -0.102 (-0.115 to -0.088) |
+| SwitchPAgent, 6,000 games, seed 2028 | uniform | 2.179 | |
+| | modeled, 25% random | 2.155 | -0.024 (-0.041 to -0.008) |
+| | modeled, 0% random | 2.162 | -0.017 (-0.034 to +0.000) |
+
+The gain is largest against the agent the rules were distilled from, and
+smaller but still significant against SwitchP, whose play the rules do not
+describe. With no random worlds the result is marginally better against
+Agent3Tuned (-0.010, CI -0.024 to +0.004) and marginally worse against SwitchP
+(+0.008, CI -0.009 to +0.024); neither difference is significant. The 25%
+default is the robust middle. Results are in
+`results/search_tuning/belief_ab.json` and `belief_ab_switchp.json`. The pinned
+class is `search_variants:ExperiencedAgent4Full64M2Modeled`.
+
+Cost: mean search decision time rose from 28 to 87 ms (p95 69 to 200 ms) in
+this fixed-work setting, mostly from chain burn-in. The default 50 ms deadline
+would trade worlds for that time. `"uniform"` therefore remains the constructor
+default.

@@ -20,3 +20,12 @@ class ExperiencedAgent4Full64M2(ExperiencedAgent4):
 
     def __init__(self, rng=None, **kwargs):
         super().__init__(rng, **{**self.SEARCH, **kwargs})
+
+
+class ExperiencedAgent4Full64M2Modeled(ExperiencedAgent4Full64M2):
+    """full64m2 with modeled opponent hands (search_sampling="modeled"):
+    HumanRulesAgent3-likelihood worlds, 25% still dealt uniformly.
+    See docs/agents/experienced-agent4.md, "Modeled opponent hands"."""
+
+    SEARCH = {**ExperiencedAgent4Full64M2.SEARCH, "search_sampling": "modeled",
+              "search_random_fraction": 0.25}

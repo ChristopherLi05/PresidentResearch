@@ -400,7 +400,7 @@ static const SearchOptions *search_options(const SearchOptions *o) {
         !isfinite(o->leaf_scale) || o->leaf_scale < 0) return NULL;
     return o;
 }
-int president_search_version(void) { return 2; }
+int president_search_version(void) { return 3; }
 int president_search_policy(const SearchPosition *position, const double w[18], PresidentAction *out) {
     PresidentRound r; SearchContext s;
     if (!out || !valid_weights(w) || !load_position(&r,position) || r.phase == FINISHED) return -1;
@@ -453,3 +453,5 @@ int president_search_rollout(const SearchPosition *position, int p, const Presid
     if (status != 1) return status;
     save_position(out,&r); *score = leaf(&s,o,&r,p); return 1;
 }
+
+#include "agent_belief_native.inc"

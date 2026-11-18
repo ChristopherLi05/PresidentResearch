@@ -8,6 +8,9 @@ from unittest.mock import patch
 import compare_agent
 
 
+# Matchups launched when BasicAgent is compared with every other built-in.
+OTHERS = len(compare_agent.OPPONENTS) - 1
+
 class CompareAgentTests(unittest.TestCase):
     def test_child_progress_is_consumed_without_leaking_terminal_output(self):
         class Bar:
@@ -83,7 +86,7 @@ class CompareAgentTests(unittest.TestCase):
             contextlib.redirect_stdout(errors)
         ), contextlib.redirect_stderr(errors):
             self.assertEqual(compare_agent.main(["BasicAgent"]), 1)
-            self.assertEqual(worker.call_count, 6)
+            self.assertEqual(worker.call_count, OTHERS)
         self.assertIn("simulated process launch failure", errors.getvalue())
 
     def test_abrupt_child_exit_needs_no_completion_file(self):
@@ -97,7 +100,7 @@ class CompareAgentTests(unittest.TestCase):
                 contextlib.redirect_stdout(errors)
             ), contextlib.redirect_stderr(errors):
                 self.assertEqual(compare_agent.main(["BasicAgent"]), 1)
-            self.assertEqual(errors.getvalue().count("(exit 7)"), 6)
+            self.assertEqual(errors.getvalue().count("(exit 7)"), OTHERS)
             self.assertEqual(list(root.glob("*.done")), [])
 
     def test_reports_wait_for_all_jobs_and_use_opponent_order(self):
@@ -114,14 +117,14 @@ class CompareAgentTests(unittest.TestCase):
             contextlib.redirect_stdout(output)
         ), contextlib.redirect_stderr(io.StringIO()):
             self.assertEqual(compare_agent.main(["BasicAgent"]), 0)
-        self.assertEqual(len(completed), 6)
+        self.assertEqual(len(completed), OTHERS)
         text = output.getvalue()
         opponents = [f"src.agent:{name}" for name in compare_agent.OPPONENTS
                      if name != "BasicAgent"]
         positions = [text.index(f"Opponent:  {opponent}\n") for opponent in opponents]
         self.assertEqual(positions, sorted(positions))
-        self.assertEqual(text.count("Evaluated: src.agent:BasicAgent"), 6)
-        self.assertEqual(text.count("| SUCCESS"), 6)
+        self.assertEqual(text.count("Evaluated: src.agent:BasicAgent"), OTHERS)
+        self.assertEqual(text.count("| SUCCESS"), OTHERS)
 
 
 if __name__ == "__main__":
